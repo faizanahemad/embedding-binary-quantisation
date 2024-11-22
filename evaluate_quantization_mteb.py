@@ -260,12 +260,101 @@ def print_markdown_table(df: pd.DataFrame):
         print(f"Error: Column not found - {e}")
         print("Available columns:", df.columns)
   
-def main():  
-    """  
-    Main function to run the evaluation.  
-    """  
-    # List of MTEB tasks to evaluate on  
+
+def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTransformer, results_dir: str) -> Dict:
+    """
+    Evaluate a single MTEB task across all model variants.
     
+    Args:
+        task (str): Name of the MTEB task to evaluate
+        embedding_model: Base SentenceTransformer model
+        results_dir (str): Directory to save results
+        
+    Returns:
+        Dict: Results for this task across all model variants
+    """
+    print(f"\nEvaluating task: {task}")
+    task_results = {}
+    embedding_dim = embedding_model.get_sentence_embedding_dimension()
+    
+    # 1. Original Model
+    print("  Evaluating Original Model...")
+    original_model = OriginalEmbeddingModel(model_name)
+    results_original = evaluate_model_on_tasks(
+        model=original_model,
+        tasks=[task],
+        model_name='Original',
+        results_dir=results_dir
+    )
+    task_results['Original'] = results_original
+
+    # 2. Stage1 Untrained
+    print("  Evaluating Stage1 Untrained...")
+    quantization_module_stage1_zero = QuantizationModuleStage1(embedding_dim)
+    quantization_module_stage1_zero.thresholds.data.fill_(0.0)
+    quantized_model_stage1_zero = QuantizedEmbeddingModelStage1(
+        embedding_model=embedding_model,
+        quantization_module=quantization_module_stage1_zero
+    )
+    results_stage1_zero = evaluate_model_on_tasks(
+        model=quantized_model_stage1_zero,
+        tasks=[task],
+        model_name='QuantStage1_Untrained',
+        results_dir=results_dir
+    )
+    task_results['QuantStage1_Untrained'] = results_stage1_zero
+
+    # 3. Stage1 Trained
+    print("  Evaluating Stage1 Trained...")
+    quantization_module_stage1_trained = QuantizationModuleStage1(embedding_dim)
+    quantization_module_stage1_trained.load_state_dict(
+        torch.load('saved_models/run_20241121_175510/quantization_stage1.pth', map_location=device)
+    )
+    quantization_module_stage1_trained.to(device)
+    quantization_module_stage1_trained.eval()
+    quantized_model_stage1_trained = QuantizedEmbeddingModelStage1(
+        embedding_model=embedding_model,
+        quantization_module=quantization_module_stage1_trained
+    )
+    results_stage1_trained = evaluate_model_on_tasks(
+        model=quantized_model_stage1_trained,
+        tasks=[task],
+        model_name='QuantStage1_Trained',
+        results_dir=results_dir
+    )
+    task_results['QuantStage1_Trained'] = results_stage1_trained
+
+    # 4. Stage2 Trained
+    print("  Evaluating Stage2 Trained...")
+    quantization_module_stage2_trained = QuantizationModuleStage2(embedding_dim)
+    quantization_module_stage2_trained.load_state_dict(
+        torch.load('saved_models/run_20241121_175516/quantization_stage2.pth', map_location=device)
+    )
+    quantization_module_stage2_trained.to(device)
+    quantization_module_stage2_trained.eval()
+    quantized_model_stage2_trained = QuantizedEmbeddingModelStage2(
+        embedding_model=embedding_model,
+        quantization_module=quantization_module_stage2_trained
+    )
+    results_stage2_trained = evaluate_model_on_tasks(
+        model=quantized_model_stage2_trained,
+        tasks=[task],
+        model_name='QuantStage2_Trained',
+        results_dir=results_dir
+    )
+    task_results['QuantStage2_Trained'] = results_stage2_trained
+
+    # Print individual task results
+    df_task_results = aggregate_results(task_results, [task])
+    print(f"\nResults for task {task}:")
+    print_markdown_table(df_task_results)
+    
+    return task_results
+
+def main():
+    """
+    Main function to run the evaluation.
+    """
     
     tasks = [
         "MedicalQARetrieval",
@@ -302,110 +391,49 @@ def main():
         "TRECCOVID"
     ]
     
-    tasks = [  
-        'NFCorpus',  
-        'TRECCOVID',  
-        'ArguAna',  
-        'SCIDOCS',  
-        'SciFact'  
-        # Add more tasks as needed  
-    ]  
-  
-    # Directory to save results  
-    results_dir = 'mteb_evaluation_results'  
-    os.makedirs(results_dir, exist_ok=True)  
-  
-    # Initialize the original embedding model  
-    model_name = 'sentence-transformers/all-MiniLM-L6-v2'  
-    embedding_model = SentenceTransformer(model_name)  
-  
-    # Dictionary to store all results  
-    all_results = {}  
-  
-    # 1. Evaluate Original Embedding Model  
-    print("Evaluating Original Embedding Model...")  
-    original_model = OriginalEmbeddingModel(model_name)  
-    results_original = evaluate_model_on_tasks(  
-        model=original_model,  
-        tasks=tasks,  
-        model_name='Original',  
-        results_dir=results_dir  
-    )  
-    all_results['Original'] = results_original  
-  
-    # 2. Evaluate QuantizationModuleStage1 with Zero Thresholds (Untrained)  
-    print("Evaluating QuantizationModuleStage1 with Zero Thresholds (Untrained)...")  
-    # Initialize QuantizationModuleStage1 with zero thresholds  
-    embedding_dim = embedding_model.get_sentence_embedding_dimension()  
-    quantization_module_stage1_zero = QuantizationModuleStage1(embedding_dim)  
+    tasks = [
+        'NFCorpus',
+        'TRECCOVID',
+        'ArguAna',
+        'SCIDOCS',
+        'SciFact'
+    ]
+
+    results_dir = 'mteb_evaluation_results'
+    os.makedirs(results_dir, exist_ok=True)
+
+    # Initialize the original embedding model
+    original_model_name = 'sentence-transformers/all-MiniLM-L6-v2'
+    embedding_model = SentenceTransformer(original_model_name)
+
+    # Dictionary to store all results
+    all_results = {
+        'Original': [],
+        'QuantStage1_Untrained': [],
+        'QuantStage1_Trained': [],
+        'QuantStage2_Trained': []
+    }
+
+    # Evaluate each task individually
+    for task in tasks:
+        task_results = evaluate_single_task(task, original_model_name, embedding_model, results_dir)
+        
+        # Accumulate results
+        for model_name, results in task_results.items():
+            all_results[model_name].extend(results)
+
+    # Aggregate and display final results
+    print("\nFinal Results Across All Tasks:")
+    df_results = aggregate_results(all_results, tasks)
     
-    # Ensure thresholds are initialized to zero  
-    quantization_module_stage1_zero.thresholds.data.fill_(0.0)  
-    quantized_model_stage1_zero = QuantizedEmbeddingModelStage1(  
-        embedding_model=embedding_model,  
-        quantization_module=quantization_module_stage1_zero  
-    )  
-    results_stage1_zero = evaluate_model_on_tasks(  
-        model=quantized_model_stage1_zero,  
-        tasks=tasks,  
-        model_name='QuantStage1_Untrained',  
-        results_dir=results_dir  
-    )  
-    all_results['QuantStage1_Untrained'] = results_stage1_zero  
-  
-    # 3. Evaluate QuantizationModuleStage1 after Training  
-    print("Evaluating QuantizationModuleStage1 after Training...")  
-    # Load the trained QuantizationModuleStage1  
-    quantization_module_stage1_trained = QuantizationModuleStage1(embedding_dim)  
-    # load the model
-    quantization_module_stage1_trained.load_state_dict(torch.load('saved_models/run_20241121_175510/quantization_stage1.pth', map_location=device))
-    quantization_module_stage1_trained.to(device)
-    quantization_module_stage1_trained.eval()  
-    quantized_model_stage1_trained = QuantizedEmbeddingModelStage1(  
-        embedding_model=embedding_model,  
-        quantization_module=quantization_module_stage1_trained  
-    )  
-    results_stage1_trained = evaluate_model_on_tasks(  
-        model=quantized_model_stage1_trained,  
-        tasks=tasks,  
-        model_name='QuantStage1_Trained',  
-        results_dir=results_dir  
-    )  
-    all_results['QuantStage1_Trained'] = results_stage1_trained  
-  
-    # 4. Evaluate QuantizationModuleStage2 after Training  
-    print("Evaluating QuantizationModuleStage2 after Training...")  
-    # Load the trained QuantizationModuleStage2  
-    quantization_module_stage2_trained = QuantizationModuleStage2(embedding_dim)  
-    quantization_module_stage2_trained.load_state_dict(torch.load('saved_models/run_20241121_175516/quantization_stage2.pth', map_location=device))  
-    quantization_module_stage2_trained.to(device)
-    quantization_module_stage2_trained.eval()  
-    quantized_model_stage2_trained = QuantizedEmbeddingModelStage2(  
-        embedding_model=embedding_model,  
-        quantization_module=quantization_module_stage2_trained  
-    )  
-    results_stage2_trained = evaluate_model_on_tasks(  
-        model=quantized_model_stage2_trained,  
-        tasks=tasks,  
-        model_name='QuantStage2_Trained',  
-        results_dir=results_dir  
-    )  
-    all_results['QuantStage2_Trained'] = results_stage2_trained  
-  
-    # Aggregate Results  
-    print("Aggregating results...") 
-    print(all_results)
-    df_results = aggregate_results(all_results, tasks)  
-  
-    # Save results to CSV  
-    csv_file = os.path.join(results_dir, 'evaluation_results.csv')  
-    df_results.to_csv(csv_file, index=False)  
-    print(f"Results saved to {csv_file}")  
-    print(df_results)
-  
-    # Print Markdown Table  
-    print("\n### Evaluation Results:\n")  
-    print_markdown_table(df_results)  
-  
+    # Save results to CSV
+    csv_file = os.path.join(results_dir, 'evaluation_results.csv')
+    df_results.to_csv(csv_file, index=False)
+    print(f"\nResults saved to {csv_file}")
+
+    # Print final markdown table
+    print("\n### Final Evaluation Results:\n")
+    print_markdown_table(df_results)
+
 if __name__ == '__main__':  
     main()  
