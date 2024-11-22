@@ -34,6 +34,8 @@ from datetime import datetime
   
 # Assuming QuantizationModuleStage1 and QuantizationModuleStage2 are defined in quantization_modules.py  
 from quantization_modules import QuantizationModuleStage1, QuantizationModuleStage2  
+
+batch_size = 512
   
   
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -61,7 +63,8 @@ class OriginalEmbeddingModel:
         embeddings = self.model.encode(  
             sentences,  
             show_progress_bar=kwargs.get('show_progress_bar', False),  
-            batch_size=kwargs.get('batch_size', 32),  
+            # batch_size=kwargs.get('batch_size', 32),  
+            encode_kwargs = {'batch_size': kwargs.get('batch_size', batch_size)},
             normalize_embeddings=True  
         )  
         return embeddings  
@@ -94,17 +97,17 @@ class QuantizedEmbeddingModelStage1:
             sentences,  
             show_progress_bar=kwargs.get('show_progress_bar', False),  
             # batch_size=kwargs.get('batch_size', 32),  
-            encode_kwargs = {'batch_size': kwargs.get('batch_size', 32)},
+            encode_kwargs = {'batch_size': kwargs.get('batch_size', batch_size)},
             normalize_embeddings=False  # Do not normalize before quantization  
         )  
         embeddings = torch.tensor(embeddings)  
         embeddings = embeddings.to(device)
         # Apply quantization  
         with torch.no_grad():  
-            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy()  
+            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy().astype(np.int8)  
         # Optionally normalize embeddings  
-        if kwargs.get('normalize_embeddings', True):  
-            quantized_embeddings = quantized_embeddings / np.linalg.norm(quantized_embeddings, axis=1, keepdims=True)  
+        # if kwargs.get('normalize_embeddings', True):  
+        #     quantized_embeddings = quantized_embeddings / np.linalg.norm(quantized_embeddings, axis=1, keepdims=True)  
         return quantized_embeddings  
   
 class QuantizedEmbeddingModelStage2:  
@@ -135,16 +138,16 @@ class QuantizedEmbeddingModelStage2:
             sentences,  
             show_progress_bar=kwargs.get('show_progress_bar', False),  
             # batch_size=kwargs.get('batch_size', 32),  
-            encode_kwargs = {'batch_size': kwargs.get('batch_size', 32)},
+            encode_kwargs = {'batch_size': kwargs.get('batch_size', batch_size)},
             normalize_embeddings=False  # Do not normalize before quantization  
         )  
         embeddings = torch.tensor(embeddings).to(device) 
         # Apply quantization  
         with torch.no_grad():  
-            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy()  
+            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy().astype(np.int8)  
         # Optionally normalize embeddings  
-        if kwargs.get('normalize_embeddings', True):  
-            quantized_embeddings = quantized_embeddings / np.linalg.norm(quantized_embeddings, axis=1, keepdims=True)  
+        # if kwargs.get('normalize_embeddings', True):  
+        #     quantized_embeddings = quantized_embeddings / np.linalg.norm(quantized_embeddings, axis=1, keepdims=True)  
         return quantized_embeddings  
   
 def evaluate_model_on_tasks(model, tasks: List[str], model_name: str, results_dir: str) -> Dict:  
@@ -173,7 +176,8 @@ def evaluate_model_on_tasks(model, tasks: List[str], model_name: str, results_di
         model,  
         eval_splits=eval_splits,  
         show_progress_bar=True,  
-        batch_size=32,  
+        # batch_size=batch_size,  
+        encode_kwargs = {'batch_size': batch_size},
         output_folder=results_dir  
     )  
   
@@ -183,11 +187,6 @@ def evaluate_model_on_tasks(model, tasks: List[str], model_name: str, results_di
   
     return results  
   
- 
-    
-    
-
-
 
 def aggregate_results(all_results: Dict[str, List], tasks: List[str]) -> pd.DataFrame:
     """
@@ -266,11 +265,48 @@ def main():
     Main function to run the evaluation.  
     """  
     # List of MTEB tasks to evaluate on  
+    
+    
+    tasks = [
+        "MedicalQARetrieval",
+        "JaqketRetrieval",
+        "FeedbackQARetrieval",
+        "AutoRAGRetrieval",
+        "IndicQARetrieval",
+        "MLQARetrieval",
+        "DBPedia",
+        "FEVER",
+        "MultiLongDocRetrieval",
+        "MrTidyRetrieval",
+        "CosQA",
+        "Core17InstructionRetrieval",
+        "CodeSearchNetRetrieval",
+        "ESCIReranking",
+    ]
+    
+    tasks = [
+        "ArguAna",
+        "ClimateFEVER", 
+        "CQADupstackTexRetrieval",
+        "DBPedia",
+        "FEVER",
+        "FiQA2018",
+        "HotpotQA", 
+        "MSMARCO",
+        "NFCorpus",
+        "NQ",
+        "QuoraRetrieval",
+        "SCIDOCS",
+        "SciFact",
+        "Touche2020",
+        "TRECCOVID"
+    ]
+    
     tasks = [  
         'NFCorpus',  
         'TRECCOVID',  
         'ArguAna',  
-        'SciDocsRR',  
+        'SCIDOCS',  
         'SciFact'  
         # Add more tasks as needed  
     ]  
