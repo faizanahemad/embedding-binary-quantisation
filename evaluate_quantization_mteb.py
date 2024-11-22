@@ -25,7 +25,7 @@ import torch
 import torch.nn as nn  
 import numpy as np  
 from sentence_transformers import SentenceTransformer  
-from mteb import MTEB  
+from mteb import MTEB, TaskResult  
 
 from typing import List, Dict  
 import pandas as pd  
@@ -180,32 +180,6 @@ def evaluate_model_on_tasks(model, tasks: List[str], model_name: str, results_di
   
     return results  
   
-def aggregate_results(all_results: Dict[str, List], tasks: List[str]) -> pd.DataFrame:  
-    """  
-    Aggregate results from all models into a DataFrame.  
-  
-    Args:  
-        all_results (Dict[str, List]): Dictionary containing results from all models.  
-        tasks (List[str]): List of task names.  
-  
-    Returns:  
-        pd.DataFrame: DataFrame with aggregated results.  
-    """  
-    data = []
-    for model_name, task_results in all_results.items():
-        # task_results is a list of TaskResult objects
-        for task_result in task_results:
-            # Extract scores from the TaskResult object
-            scores = task_result.scores
-            for metric_name, metric_value in scores.items():
-                data.append({
-                    'Model': model_name,
-                    'Task': task_result.task_name,
-                    'Metric': metric_name,
-                    'Score': metric_value
-                })
-    return pd.DataFrame(data)
-  
 def print_markdown_table(df: pd.DataFrame):  
     """  
     Print a markdown table from the results DataFrame.  
@@ -217,40 +191,10 @@ def print_markdown_table(df: pd.DataFrame):
     print(pivot_df.to_markdown())  
     
     
-def aggregate_results(all_results: Dict[str, List], tasks: List[str]) -> pd.DataFrame:
-    """
-    Aggregate results from all models into a DataFrame.
-
-    Args:
-        all_results (Dict[str, List]): Dictionary containing results from all models.
-        tasks (List[str]): List of task names.
-
-    Returns:
-        pd.DataFrame: DataFrame with aggregated results.
-    """
-    data = []
-    for model_name, results in all_results.items():
-        for task_name, task_results in results.items():
-            # Extract main_score and other key metrics
-            metrics = {
-                'main_score': task_results[0]['main_score'],
-                'map_at_1': task_results[0]['map_at_1'],
-                'map_at_10': task_results[0]['map_at_10'],
-                'ndcg_at_10': task_results[0]['ndcg_at_10']
-            }
-            
-            for metric_name, metric_value in metrics.items():
-                data.append({
-                    'Model': model_name,
-                    'Task': task_name,
-                    'Metric': metric_name,
-                    'Score': metric_value
-                })
-    
-    return pd.DataFrame(data)
 
 
-def aggregate_results(all_results: Dict[str, List], tasks: List[str]) -> pd.DataFrame:
+
+def aggregate_results(all_results: Dict[str, List[TaskResult]], tasks: List[str]) -> pd.DataFrame:
     """
     Aggregate results from all models into a DataFrame.
 
@@ -285,7 +229,7 @@ def aggregate_results(all_results: Dict[str, List], tasks: List[str]) -> pd.Data
     
     return pd.DataFrame(data)
 
-def aggregate_results(all_results: Dict[str, List], tasks: List[str]) -> pd.DataFrame:
+def aggregate_results(all_results: Dict[str, List[TaskResult]], tasks: List[str]) -> pd.DataFrame:
     """
     Aggregate results from all models into a DataFrame.
 
@@ -325,6 +269,103 @@ def aggregate_results(all_results: Dict[str, List], tasks: List[str]) -> pd.Data
                     })
     
     return pd.DataFrame(data)
+
+
+def aggregate_results(all_results: Dict[str, List[TaskResult]], tasks: List[str]) -> pd.DataFrame:
+    """
+    Aggregate results from all models into a DataFrame.
+
+    Args:
+        all_results (Dict[str, List]): Dictionary containing results from all models.
+        tasks (List[str]): List of task names.
+
+    Returns:
+        pd.DataFrame: DataFrame with aggregated results.
+    """
+    data = []
+    
+    # Debug print to see the structure of all_results
+    print("All results structure:")
+    print(all_results)
+    
+    for model_name, task_results in all_results.items():
+        print(f"\nProcessing model: {model_name}")
+        print(f"Task results type: {type(task_results)}")
+        print(f"Task results content: {task_results}")
+        
+        # task_results is a list of TaskResult objects
+        for task_result in task_results:
+            print(f"\nProcessing task result: {task_result}")
+            # Extract scores from the TaskResult object
+            scores = task_result.scores
+            print(f"Scores: {scores}")
+            
+            # Extract metrics with safe get operation
+            metrics = {
+                'ndcg_at_10': scores.get('ndcg_at_10', None),
+                'map_at_1': scores.get('map_at_1', None),
+                'map_at_10': scores.get('map_at_10', None),
+                'mrr_at_10': scores.get('mrr_at_10', None)
+            }
+            
+            print(f"Extracted metrics: {metrics}")
+            
+            for metric_name, metric_value in metrics.items():
+                if metric_value is not None:  # Only add if metric exists
+                    entry = {
+                        'Model': model_name,
+                        'Task': task_result.task_name,
+                        'Metric': metric_name,
+                        'Score': metric_value
+                    }
+                    print(f"Adding entry: {entry}")
+                    data.append(entry)
+    
+    df = pd.DataFrame(data)
+    print("\nFinal DataFrame:")
+    print(df)
+    return df
+
+
+def aggregate_results(all_results: Dict[str, List], tasks: List[str]) -> pd.DataFrame:
+    """
+    Aggregate results from all models into a DataFrame.
+
+    Args:
+        all_results (Dict[str, List]): Dictionary containing results from all models.
+        tasks (List[str]): List of task names.
+
+    Returns:
+        pd.DataFrame: DataFrame with aggregated results.
+    """
+    data = []
+    for model_name, task_results in all_results.items():
+        # task_results is a list of TaskResult objects
+        for task_result in task_results:
+            # Extract scores from the TaskResult object - handle nested structure
+            test_scores = task_result.scores['test'][0]  # Get first element of test scores
+            
+            # Extract metrics
+            metrics = {
+                'main_score': test_scores.get('main_score', None),
+                'ndcg_at_10': test_scores.get('ndcg_at_10', None),
+                'map_at_1': test_scores.get('map_at_1', None),
+                'map_at_10': test_scores.get('map_at_10', None),
+                'mrr_at_10': test_scores.get('mrr_at_10', None)
+            }
+            
+            for metric_name, metric_value in metrics.items():
+                if metric_value is not None:  # Only add if metric exists
+                    data.append({
+                        'Model': model_name,
+                        'Task': task_result.task_name,
+                        'Metric': metric_name,
+                        'Score': metric_value
+                    })
+    
+    df = pd.DataFrame(data)
+    return df
+
 
 def print_markdown_table(df: pd.DataFrame):
     """
@@ -482,6 +523,7 @@ def main():
     csv_file = os.path.join(results_dir, 'evaluation_results.csv')  
     df_results.to_csv(csv_file, index=False)  
     print(f"Results saved to {csv_file}")  
+    print(df_results)
   
     # Print Markdown Table  
     print("\n### Evaluation Results:\n")  
