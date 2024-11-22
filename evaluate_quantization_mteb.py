@@ -28,6 +28,9 @@ import torch.nn as nn
 import numpy as np  
 from sentence_transformers import SentenceTransformer  
 from mteb import MTEB, TaskResult  
+from mteb.abstasks.AbsTask import AbsTask
+from mteb.models.wrapper import Wrapper
+from mteb.encoder_interface import Encoder
 
 from typing import List, Dict  
 import pandas as pd  
@@ -41,7 +44,7 @@ batch_size = 512
   
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class OriginalEmbeddingModel:  
+class OriginalEmbeddingModel(Wrapper, Encoder):  
     """  
     Original embedding model without any quantization.  
   
@@ -51,11 +54,11 @@ class OriginalEmbeddingModel:
         self.model = SentenceTransformer(model_name)  
         self.model.to(device)
         self.model_card_data = {
-            "name": "OriginalEmbeddingModel",
             "model_name": model_name,
+            "base_model": model_name,
+            "base_model_revision": None,
             "language": ["en"],
-            "license": "apache-2.0",
-            "pipeline_tag": "sentence-similarity"
+            "similarity_fn_name": "cos_sim"
         }
         print("[INIT] Finished creating OriginalEmbeddingModel\n")
         
@@ -96,7 +99,7 @@ class OriginalEmbeddingModel:
         
         return embeddings  
   
-class QuantizedEmbeddingModelStage1:  
+class QuantizedEmbeddingModelStage1(Wrapper, Encoder):  
     """  
     Embedding model with QuantizationModuleStage1 applied.  
   
@@ -108,11 +111,11 @@ class QuantizedEmbeddingModelStage1:
         self.quantization_module = quantization_module
         self.quantization_module.to(device)  # Move quantization module to GPU
         self.model_card_data = {
-            "name": "QuantizedEmbeddingModelStage1",
             "model_name": "QuantizedEmbeddingModelStage1",
+            "base_model": "QuantizedEmbeddingModelStage1",
+            "base_model_revision": None,
             "language": ["en"],
-            "license": "apache-2.0",
-            "pipeline_tag": "sentence-similarity"
+            "similarity_fn_name": "cos_sim"
         }
 
   
@@ -150,7 +153,7 @@ class QuantizedEmbeddingModelStage1:
         #     quantized_embeddings = quantized_embeddings / np.linalg.norm(quantized_embeddings, axis=1, keepdims=True)  
         return quantized_embeddings  
   
-class QuantizedEmbeddingModelStage2:  
+class QuantizedEmbeddingModelStage2(Wrapper, Encoder):  
     """  
     Embedding model with QuantizationModuleStage2 applied.  
   
@@ -161,10 +164,15 @@ class QuantizedEmbeddingModelStage2:
         self.embedding_model.to(device)  # Move embedding model to GPU
         self.quantization_module = quantization_module
         self.quantization_module.to(device)  # Move quantization module to GPU
+        
+        
         self.model_card_data = {
-            "name": "QuantizedEmbeddingModelStage2",
             "model_name": "QuantizedEmbeddingModelStage2",
+            "base_model": "QuantizedEmbeddingModelStage2",
+            "model_name": "QuantizedEmbeddingModelStage2",
+            "base_model_revision": None,
             "language": ["en"],
+            "similarity_fn_name": "cos_sim",
             "license": "apache-2.0",
             "pipeline_tag": "sentence-similarity"
         }
@@ -230,7 +238,8 @@ def evaluate_model_on_tasks(model, tasks: List[str], model_name: str, results_di
         show_progress_bar=True,  
         # batch_size=batch_size,  
         encode_kwargs = {'batch_size': batch_size},
-        output_folder=results_dir  
+        output_folder=results_dir,
+        overwrite_results=True  
     )  
   
     # Save results to a file  
@@ -332,7 +341,7 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
     # 1. Original Model
     print("  Evaluating Original Model...")
     original_model = OriginalEmbeddingModel(model_name)
-    print(f"[DEBUG] Created model type: {type(original_model)}")  # Add this debug print
+    # print(f"[DEBUG] Created model type: {type(original_model)}")  # Add this debug print
     results_original = evaluate_model_on_tasks(
         model=original_model,
         tasks=[task],
