@@ -31,6 +31,7 @@ from mteb import MTEB, TaskResult
 from mteb.abstasks.AbsTask import AbsTask
 from mteb.models.wrapper import Wrapper
 from mteb.encoder_interface import Encoder
+from config import base_model_name
 
 from typing import List, Dict  
 import pandas as pd  
@@ -469,7 +470,7 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     # Initialize the original embedding model
-    original_model_name = 'sentence-transformers/all-MiniLM-L6-v2'
+    original_model_name = base_model_name
     embedding_model = SentenceTransformer(original_model_name)
 
     # Dictionary to store all results

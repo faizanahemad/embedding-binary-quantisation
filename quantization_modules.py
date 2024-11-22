@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
+from config import base_model_name
 
 from dataset import CombinedSimilarityDataset
 
@@ -168,7 +169,7 @@ class ExampleDataset(Dataset):
     """  
     def __init__(self, texts):  
         self.texts = texts  
-        self.tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')  
+        self.tokenizer = AutoTokenizer.from_pretrained(base_model_name)  
   
     def __len__(self):  
         return len(self.texts)  
@@ -267,9 +268,9 @@ def train_quantization_stage2(embedding_model, quantization_module, dataloader, 
   
 def main():  
     # Load the frozen embedding model  
-    embedding_model = AutoModel.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')  
+    embedding_model = AutoModel.from_pretrained(base_model_name)  
     embedding_dim = embedding_model.config.hidden_size  # e.g., 384  
-    tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
   
     # Freeze the embedding model parameters  
     for param in embedding_model.parameters():  
@@ -301,7 +302,7 @@ def main():
   
     # Example input  
     input_text = "New input text for inference."  
-    tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')  
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)  
     encoded_input = tokenizer(input_text, return_tensors='pt')  
   
     with torch.no_grad():  
