@@ -21,6 +21,7 @@ Requirements:
 """  
   
 import os  
+import mteb
 import torch  
 import torch.nn as nn  
 import numpy as np  
@@ -92,7 +93,8 @@ class QuantizedEmbeddingModelStage1:
         embeddings = self.embedding_model.encode(  
             sentences,  
             show_progress_bar=kwargs.get('show_progress_bar', False),  
-            batch_size=kwargs.get('batch_size', 32),  
+            # batch_size=kwargs.get('batch_size', 32),  
+            encode_kwargs = {'batch_size': kwargs.get('batch_size', 32)},
             normalize_embeddings=False  # Do not normalize before quantization  
         )  
         embeddings = torch.tensor(embeddings)  
@@ -132,7 +134,8 @@ class QuantizedEmbeddingModelStage2:
         embeddings = self.embedding_model.encode(  
             sentences,  
             show_progress_bar=kwargs.get('show_progress_bar', False),  
-            batch_size=kwargs.get('batch_size', 32),  
+            # batch_size=kwargs.get('batch_size', 32),  
+            encode_kwargs = {'batch_size': kwargs.get('batch_size', 32)},
             normalize_embeddings=False  # Do not normalize before quantization  
         )  
         embeddings = torch.tensor(embeddings).to(device) 
@@ -161,11 +164,11 @@ def evaluate_model_on_tasks(model, tasks: List[str], model_name: str, results_di
     os.makedirs(results_dir, exist_ok=True)  
   
     # Initialize MTEB with the specified tasks  
-    task_objects = MTEB(tasks=tasks)  
+    # task_objects = MTEB(tasks=mteb.get_tasks(tasks=tasks))  
   
     # Run evaluation  
     eval_splits = ['test']  # Evaluate on test split only  
-    evaluation = MTEB(tasks=tasks)  
+    evaluation = MTEB(tasks=mteb.get_tasks(tasks=tasks))  
     results = evaluation.run(  
         model,  
         eval_splits=eval_splits,  
@@ -180,151 +183,10 @@ def evaluate_model_on_tasks(model, tasks: List[str], model_name: str, results_di
   
     return results  
   
-def print_markdown_table(df: pd.DataFrame):  
-    """  
-    Print a markdown table from the results DataFrame.  
-  
-    Args:  
-        df (pd.DataFrame): DataFrame containing the results.  
-    """  
-    pivot_df = df.pivot_table(values='Score', index=['Task', 'Metric'], columns='Model')  
-    print(pivot_df.to_markdown())  
+ 
     
     
 
-
-
-def aggregate_results(all_results: Dict[str, List[TaskResult]], tasks: List[str]) -> pd.DataFrame:
-    """
-    Aggregate results from all models into a DataFrame.
-
-    Args:
-        all_results (Dict[str, List]): Dictionary containing results from all models.
-        tasks (List[str]): List of task names.
-
-    Returns:
-        pd.DataFrame: DataFrame with aggregated results.
-    """
-    data = []
-    for model_name, task_results in all_results.items():
-        # task_results is a list of TaskResult objects
-        for task_result in task_results:
-            # Extract scores from the TaskResult object
-            scores = task_result.scores
-            # Extract key metrics we want to display
-            metrics = {
-                'main_score': scores['main_score'],
-                'map_at_1': scores['map_at_1'],
-                'map_at_10': scores['map_at_10'],
-                'ndcg_at_10': scores['ndcg_at_10']
-            }
-            
-            for metric_name, metric_value in metrics.items():
-                data.append({
-                    'Model': model_name,
-                    'Task': task_result.task_name,
-                    'Metric': metric_name,
-                    'Score': metric_value
-                })
-    
-    return pd.DataFrame(data)
-
-def aggregate_results(all_results: Dict[str, List[TaskResult]], tasks: List[str]) -> pd.DataFrame:
-    """
-    Aggregate results from all models into a DataFrame.
-
-    Args:
-        all_results (Dict[str, List]): Dictionary containing results from all models.
-        tasks (List[str]): List of task names.
-
-    Returns:
-        pd.DataFrame: DataFrame with aggregated results.
-    """
-    data = []
-    for model_name, task_results in all_results.items():
-        # task_results is a list of TaskResult objects
-        for task_result in task_results:
-            # Extract scores from the TaskResult object
-            scores = task_result.scores
-            
-            # Print available scores for debugging
-            print(f"Available scores for {model_name}, {task_result.task_name}:")
-            print(scores)
-            
-            # Extract metrics with safe get operation
-            metrics = {
-                'ndcg_at_10': scores.get('ndcg_at_10', None),
-                'map_at_1': scores.get('map_at_1', None),
-                'map_at_10': scores.get('map_at_10', None),
-                'mrr_at_10': scores.get('mrr_at_10', None)  # Changed from main_score to mrr_at_10
-            }
-            
-            for metric_name, metric_value in metrics.items():
-                if metric_value is not None:  # Only add if metric exists
-                    data.append({
-                        'Model': model_name,
-                        'Task': task_result.task_name,
-                        'Metric': metric_name,
-                        'Score': metric_value
-                    })
-    
-    return pd.DataFrame(data)
-
-
-def aggregate_results(all_results: Dict[str, List[TaskResult]], tasks: List[str]) -> pd.DataFrame:
-    """
-    Aggregate results from all models into a DataFrame.
-
-    Args:
-        all_results (Dict[str, List]): Dictionary containing results from all models.
-        tasks (List[str]): List of task names.
-
-    Returns:
-        pd.DataFrame: DataFrame with aggregated results.
-    """
-    data = []
-    
-    # Debug print to see the structure of all_results
-    print("All results structure:")
-    print(all_results)
-    
-    for model_name, task_results in all_results.items():
-        print(f"\nProcessing model: {model_name}")
-        print(f"Task results type: {type(task_results)}")
-        print(f"Task results content: {task_results}")
-        
-        # task_results is a list of TaskResult objects
-        for task_result in task_results:
-            print(f"\nProcessing task result: {task_result}")
-            # Extract scores from the TaskResult object
-            scores = task_result.scores
-            print(f"Scores: {scores}")
-            
-            # Extract metrics with safe get operation
-            metrics = {
-                'ndcg_at_10': scores.get('ndcg_at_10', None),
-                'map_at_1': scores.get('map_at_1', None),
-                'map_at_10': scores.get('map_at_10', None),
-                'mrr_at_10': scores.get('mrr_at_10', None)
-            }
-            
-            print(f"Extracted metrics: {metrics}")
-            
-            for metric_name, metric_value in metrics.items():
-                if metric_value is not None:  # Only add if metric exists
-                    entry = {
-                        'Model': model_name,
-                        'Task': task_result.task_name,
-                        'Metric': metric_name,
-                        'Score': metric_value
-                    }
-                    print(f"Adding entry: {entry}")
-                    data.append(entry)
-    
-    df = pd.DataFrame(data)
-    print("\nFinal DataFrame:")
-    print(df)
-    return df
 
 
 def aggregate_results(all_results: Dict[str, List], tasks: List[str]) -> pd.DataFrame:
@@ -367,27 +229,7 @@ def aggregate_results(all_results: Dict[str, List], tasks: List[str]) -> pd.Data
     return df
 
 
-def print_markdown_table(df: pd.DataFrame):
-    """
-    Print a markdown table from the results DataFrame.
 
-    Args:
-        df (pd.DataFrame): DataFrame containing the results.
-    """
-    # If df is loaded from CSV, parse the Score column if it contains JSON strings
-    if isinstance(df['Score'].iloc[0], str) and df['Score'].iloc[0].startswith('['):
-        # Extract main_score from the JSON string
-        df['Score'] = df['Score'].apply(lambda x: eval(x)[0]['main_score'])
-    
-    # Create pivot table with rounded values
-    pivot_df = df.pivot_table(
-        values='Score',
-        index=['Task', 'Metric'],
-        columns='Model',
-        aggfunc='first'  # Use 'first' since we don't need to aggregate
-    ).round(4)
-    
-    print(pivot_df.to_markdown())
     
 def print_markdown_table(df: pd.DataFrame):
     """
@@ -426,9 +268,9 @@ def main():
     # List of MTEB tasks to evaluate on  
     tasks = [  
         'NFCorpus',  
-        'TREC-COVID',  
+        'TRECCOVID',  
         'ArguAna',  
-        'SciDocs',  
+        'SciDocsRR',  
         'SciFact'  
         # Add more tasks as needed  
     ]  
