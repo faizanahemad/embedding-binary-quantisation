@@ -108,7 +108,8 @@ class QuantizedEmbeddingModelStage1(Wrapper, Encoder):
     """  
     def __init__(self, embedding_model: SentenceTransformer, quantization_module: QuantizationModuleStage1):  
         self.embedding_model = embedding_model  
-        self.embedding_model.to(device)  # Move embedding model to GPU
+        self.model = embedding_model
+        self.model.to(device)  # Move embedding model to GPU
         self.quantization_module = quantization_module
         self.quantization_module.to(device)  # Move quantization module to GPU
         self.model_card_data = {
@@ -144,7 +145,7 @@ class QuantizedEmbeddingModelStage1(Wrapper, Encoder):
         print(embeddings[:5])
         # Apply quantization  
         with torch.no_grad():  
-            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy().astype(np.int8)  
+            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy()
             
         # assert quantized_embeddings only contains 0, 1
         assert np.all(np.isin(quantized_embeddings, [0, 1]))
@@ -162,7 +163,8 @@ class QuantizedEmbeddingModelStage2(Wrapper, Encoder):
     """  
     def __init__(self, embedding_model: SentenceTransformer, quantization_module: QuantizationModuleStage2):  
         self.embedding_model = embedding_model  
-        self.embedding_model.to(device)  # Move embedding model to GPU
+        self.model = embedding_model
+        self.model.to(device)  # Move embedding model to GPU
         self.quantization_module = quantization_module
         self.quantization_module.to(device)  # Move quantization module to GPU
         
@@ -202,7 +204,7 @@ class QuantizedEmbeddingModelStage2(Wrapper, Encoder):
         print(embeddings[:5])
         # Apply quantization  
         with torch.no_grad():  
-            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy().astype(np.int8)  
+            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy()
         # assert quantized_embeddings only contains 0, 1
         assert np.all(np.isin(quantized_embeddings, [0, 1]))
         print(quantized_embeddings[:5])
