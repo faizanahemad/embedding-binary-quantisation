@@ -1,3 +1,10 @@
+# Next Steps
+- Better Training with contrastive loss
+- Sigmoid saturates so we need a better activation function
+- Initialisation of thresholds plays an important role and hence multiple random initialisations are tried and the best one is chosen, Use a different test set for final reporting, while for choosing the right initialisation we use the validation set
+- 
+
+-----------
 # embedding-binary-quantisation
 
 

@@ -13,36 +13,9 @@ from dataset import CombinedSimilarityDataset
 
 import os  
 from datetime import datetime  
-  
-def create_save_directory(base_dir='saved_models'):  
-    """  
-    Creates a directory named 'run_{date_time}' inside the base directory.  
-  
-    Args:  
-        base_dir (str): Base directory where the run directory will be created.  
-  
-    Returns:  
-        save_dir (str): The path to the created directory.  
-    """  
-    date_time = datetime.now().strftime('%Y%m%d_%H%M')  
-    save_dir = os.path.join(base_dir, f'run_{date_time}')  
-    os.makedirs(save_dir, exist_ok=True)  
-    return save_dir  
-  
-def save_quantization_module(model, save_dir, model_name):  
-    """  
-    Saves the quantization module's parameters to the specified directory.  
-  
-    Args:  
-        model (nn.Module): The quantization module to save.  
-        save_dir (str): Directory where the model will be saved.  
-        model_name (str): Name to use for the saved model file.  
-    """  
-    model_path = os.path.join(save_dir, f'{model_name}.pth')  
-    torch.save(model.state_dict(), model_path)  
-    print(f'Model saved to {model_path}')  
+from common import create_save_directory, save_quantization_module, similarity_preservation_loss
+from improved_quantisation_module import ImprovedQuantizationModule, train_improved_quantization
 
-  
 # Stage 1: Implement per-dimension thresholds  
   
 class QuantizationModuleStage1(nn.Module):  
@@ -133,53 +106,12 @@ class QuantizationModuleStage2(nn.Module):
 
         quantized_embeddings = torch.cat([quantized_first_half, combined_outputs], dim=1)
         return quantized_embeddings if not binary else (quantized_embeddings > 0.5).float()
-  
+    
+    
 
 # Loss function  
   
-def similarity_preservation_loss(original_embeddings, quantized_embeddings):  
-    """  
-    Compute the loss to preserve similarity relationships.  
-  
-    Args:  
-        original_embeddings (torch.Tensor): Original embeddings, shape (batch_size, embedding_dim)  
-        quantized_embeddings (torch.Tensor): Quantized embeddings, shape (batch_size, embedding_dim_new)  
-  
-    Returns:  
-        loss (torch.Tensor): Scalar loss value  
-    """  
-    # Normalize embeddings  
-    original_norm = F.normalize(original_embeddings, dim=1)  
-    quantized_norm = F.normalize(quantized_embeddings, dim=1)  
-  
-    # Compute similarity matrices  
-    sim_original = torch.matmul(original_norm, original_norm.t())  # Shape: (batch_size, batch_size)  
-    sim_quantized = torch.matmul(quantized_norm, quantized_norm.t())  # Shape: (batch_size, batch_size)  
-  
-    # Compute Mean Squared Error between similarity matrices  
-    loss = F.mse_loss(sim_quantized, sim_original)  
-  
-    return loss  
-  
-# Dataset preparation (Example using random data for demonstration)  
-  
-class ExampleDataset(Dataset):  
-    """  
-    Example dataset for demonstration purposes.  
-    Replace this with actual data loading from MS MARCO or other dataset.  
-    """  
-    def __init__(self, texts):  
-        self.texts = texts  
-        self.tokenizer = AutoTokenizer.from_pretrained(base_model_name)  
-  
-    def __len__(self):  
-        return len(self.texts)  
-  
-    def __getitem__(self, idx):  
-        text = self.texts[idx]  
-        encoded = self.tokenizer(text, return_tensors='pt', truncation=True, padding='max_length', max_length=128)  
-        return encoded  
-  
+
 # Training function  
   
 def train_quantization_stage1(embedding_model, quantization_module, dataloader, num_epochs=5):  
@@ -300,10 +232,16 @@ def main():
     quantization_module_stage2.to(device)
     quantization_module_stage2 = train_quantization_stage2(embedding_model, quantization_module_stage2, dataloader, num_epochs=num_epochs)  
     
+    # Stage 3: Train with adaptive thresholds, importance scoring, and progressive dimension pruning
+    quantization_module_stage3 = ImprovedQuantizationModule(embedding_dim)
+    quantization_module_stage3.to(device)
+    quantization_module_stage3 = train_improved_quantization(embedding_model, quantization_module_stage3, dataloader, num_epochs=num_epochs)
+    
     save_dir = create_save_directory()  
     print(f'Saving models to {save_dir}')
     save_quantization_module(quantization_module_stage1, save_dir, 'quantization_stage1')  
     save_quantization_module(quantization_module_stage2, save_dir, 'quantization_stage2')  
+    save_quantization_module(quantization_module_stage3, save_dir, 'improved_quantization')
     # Inference example  
     embedding_model.eval()  
     quantization_module_stage2.eval()  
