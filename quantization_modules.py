@@ -1,3 +1,4 @@
+from unittest import result
 import torch  
 import torch.nn as nn  
 import torch.optim as optim  
@@ -5,7 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name
+from config import base_model_name, reg_strength, num_epochs, batch_size
 
 from dataset import CombinedSimilarityDataset
 
@@ -23,7 +24,7 @@ def create_save_directory(base_dir='saved_models'):
     Returns:  
         save_dir (str): The path to the created directory.  
     """  
-    date_time = datetime.now().strftime('%Y%m%d_%H%M%S')  
+    date_time = datetime.now().strftime('%Y%m%d_%H%M')  
     save_dir = os.path.join(base_dir, f'run_{date_time}')  
     os.makedirs(save_dir, exist_ok=True)  
     return save_dir  
@@ -76,7 +77,7 @@ class QuantizationModuleStage1(nn.Module):
         k = 10  # Temperature parameter controlling the steepness  
         quantized_embeddings = torch.sigmoid(k * v)  
   
-        return quantized_embeddings if not binary else (quantized_embeddings > 0.5).int()  
+        return quantized_embeddings if not binary else (quantized_embeddings > 0.5).float()
   
 # Stage 2: Extend to handle combined dimensions  
 
@@ -131,7 +132,7 @@ class QuantizationModuleStage2(nn.Module):
         combined_outputs = 1 - (1 - s_pairs[:, :, 0]) * (1 - s_pairs[:, :, 1])
 
         quantized_embeddings = torch.cat([quantized_first_half, combined_outputs], dim=1)
-        return quantized_embeddings if not binary else (quantized_embeddings > 0.5).int()
+        return quantized_embeddings if not binary else (quantized_embeddings > 0.5).float()
   
 
 # Loss function  
@@ -191,7 +192,7 @@ def train_quantization_stage1(embedding_model, quantization_module, dataloader, 
         dataloader (DataLoader): DataLoader for the dataset  
         num_epochs (int): Number of training epochs  
     """  
-    optimizer = optim.Adam(quantization_module.parameters(), lr=0.01)  
+    optimizer = optim.Adam(quantization_module.parameters(), lr=0.001)  
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   
     embedding_model.eval()  
@@ -209,7 +210,7 @@ def train_quantization_stage1(embedding_model, quantization_module, dataloader, 
   
             quantized_embeddings = quantization_module(embeddings)  
   
-            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  
+            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * torch.norm(quantization_module.thresholds, 2)
   
             optimizer.zero_grad()  
             loss.backward()  
@@ -219,6 +220,7 @@ def train_quantization_stage1(embedding_model, quantization_module, dataloader, 
   
         avg_loss = total_loss / len(dataloader)  
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}')  
+    return quantization_module
     save_dir = create_save_directory()  
     save_quantization_module(quantization_module, save_dir, 'quantization_stage1')  
     
@@ -233,7 +235,7 @@ def train_quantization_stage2(embedding_model, quantization_module, dataloader, 
         dataloader (DataLoader): DataLoader for the dataset  
         num_epochs (int): Number of training epochs  
     """  
-    optimizer = optim.Adam(quantization_module.parameters(), lr=0.01)  
+    optimizer = optim.Adam(quantization_module.parameters(), lr=0.001)  
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     embedding_model.eval()  
     quantization_module.train()  
@@ -250,7 +252,7 @@ def train_quantization_stage2(embedding_model, quantization_module, dataloader, 
   
             quantized_embeddings = quantization_module(embeddings)  
   
-            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  
+            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * torch.norm(quantization_module.thresholds_first_half, 2) + reg_strength * torch.norm(quantization_module.thresholds_second_half, 2)
   
             optimizer.zero_grad()  
             loss.backward()  
@@ -260,6 +262,7 @@ def train_quantization_stage2(embedding_model, quantization_module, dataloader, 
   
         avg_loss = total_loss / len(dataloader)  
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}')  
+    return quantization_module
     save_dir = create_save_directory()  
     save_quantization_module(quantization_module, save_dir, 'quantization_stage2')  
     
@@ -280,8 +283,8 @@ def main():
     # texts = ["This is a sample sentence.", "Another example text.", "More data for training."]  
     # dataset = ExampleDataset(texts)  
     
-    dataset = CombinedSimilarityDataset(tokenizer, max_length=128, max_samples_per_dataset=1000)
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=False) 
+    dataset = CombinedSimilarityDataset(tokenizer, max_length=128, max_samples_per_dataset=10000)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False) 
   
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
@@ -289,13 +292,18 @@ def main():
     # Stage 1: Train per-dimension thresholds  
     quantization_module_stage1 = QuantizationModuleStage1(embedding_dim)  
     quantization_module_stage1.to(device)
-    train_quantization_stage1(embedding_model, quantization_module_stage1, dataloader, num_epochs=5)  
+    quantization_module_stage1 = train_quantization_stage1(embedding_model, quantization_module_stage1, dataloader, num_epochs=num_epochs)  
+    
   
     # Stage 2: Train with combined dimensions  
     quantization_module_stage2 = QuantizationModuleStage2(embedding_dim)  
     quantization_module_stage2.to(device)
-    train_quantization_stage2(embedding_model, quantization_module_stage2, dataloader, num_epochs=5)  
-  
+    quantization_module_stage2 = train_quantization_stage2(embedding_model, quantization_module_stage2, dataloader, num_epochs=num_epochs)  
+    
+    save_dir = create_save_directory()  
+    print(f'Saving models to {save_dir}')
+    save_quantization_module(quantization_module_stage1, save_dir, 'quantization_stage1')  
+    save_quantization_module(quantization_module_stage2, save_dir, 'quantization_stage2')  
     # Inference example  
     embedding_model.eval()  
     quantization_module_stage2.eval()  

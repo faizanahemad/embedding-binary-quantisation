@@ -61,10 +61,10 @@ class OriginalEmbeddingModel(Wrapper, Encoder):
             "language": ["en"],
             "similarity_fn_name": "cos_sim"
         }
-        print("[INIT] Finished creating OriginalEmbeddingModel\n")
+        # print("[INIT] Finished creating OriginalEmbeddingModel\n")
         
     def __call__(self, *args, **kwargs):
-        print("\n[DEBUG] OriginalEmbeddingModel.__call__ was invoked")
+        # print("\n[DEBUG] OriginalEmbeddingModel.__call__ was invoked")
         return self.encode(*args, **kwargs)
         
   
@@ -79,13 +79,13 @@ class OriginalEmbeddingModel(Wrapper, Encoder):
             np.ndarray: Array of embeddings.  
         """  
         # raise NotImplementedError("OriginalEmbeddingModel should not be used for encoding")
-        print("\n[DEBUG] Starting OriginalEmbeddingModel.encode()")
-        print(f"Encoding {len(sentences)} sentences with OriginalEmbeddingModel")
-        print("\n[ENCODE] Starting encode method", file=sys.stderr)  # Print to stderr
-        sys.stderr.flush()  # Force flush stderr
-        # Log to file as well
-        with open('debug.log', 'a') as f:
-            f.write(f"\nEncoding {len(sentences)} sentences\n")
+        # print("\n[DEBUG] Starting OriginalEmbeddingModel.encode()")
+        # print(f"Encoding {len(sentences)} sentences with OriginalEmbeddingModel")
+        # print("\n[ENCODE] Starting encode method", file=sys.stderr)  # Print to stderr
+        # sys.stderr.flush()  # Force flush stderr
+        # # Log to file as well
+        # with open('debug.log', 'a') as f:
+        #     f.write(f"\nEncoding {len(sentences)} sentences\n")
         
         embeddings = self.model.encode(  
             sentences,  
@@ -94,9 +94,9 @@ class OriginalEmbeddingModel(Wrapper, Encoder):
             encode_kwargs = {'batch_size': kwargs.get('batch_size', batch_size)},
             normalize_embeddings=True  
         )  
-        print("[DEBUG] Finished OriginalEmbeddingModel.encode()\n")
-        print("[ENCODE] Finished encode method\n", file=sys.stderr)
-        sys.stderr.flush()
+        # print("[DEBUG] Finished OriginalEmbeddingModel.encode()\n")
+        # print("[ENCODE] Finished encode method\n", file=sys.stderr)
+        # sys.stderr.flush()
         
         return embeddings  
   
@@ -142,14 +142,14 @@ class QuantizedEmbeddingModelStage1(Wrapper, Encoder):
         embeddings = torch.tensor(embeddings)  
         embeddings = embeddings.to(device)
         # print few embeddings to check if they are in the correct range
-        print(embeddings[:5])
+        # print(embeddings[:5])
         # Apply quantization  
         with torch.no_grad():  
             quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy()
             
         # assert quantized_embeddings only contains 0, 1
         assert np.all(np.isin(quantized_embeddings, [0, 1]))
-        print(quantized_embeddings[:5])
+        # print(quantized_embeddings[:5])
         # Optionally normalize embeddings  
         # if kwargs.get('normalize_embeddings', True):  
         #     quantized_embeddings = quantized_embeddings / np.linalg.norm(quantized_embeddings, axis=1, keepdims=True)  
@@ -201,13 +201,13 @@ class QuantizedEmbeddingModelStage2(Wrapper, Encoder):
         )  
         embeddings = torch.tensor(embeddings).to(device) 
         # print few embeddings to check if they are in the correct range
-        print(embeddings[:5])
+        # print(embeddings[:5])
         # Apply quantization  
         with torch.no_grad():  
             quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy()
         # assert quantized_embeddings only contains 0, 1
         assert np.all(np.isin(quantized_embeddings, [0, 1]))
-        print(quantized_embeddings[:5])
+        # print(quantized_embeddings[:5])
         # Optionally normalize embeddings  
         # if kwargs.get('normalize_embeddings', True):  
         #     quantized_embeddings = quantized_embeddings / np.linalg.norm(quantized_embeddings, axis=1, keepdims=True)  
@@ -356,7 +356,7 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
     # 2. Stage1 Untrained
     print("  Evaluating Stage1 Untrained...")
     quantization_module_stage1_zero = QuantizationModuleStage1(embedding_dim)
-    quantization_module_stage1_zero.thresholds.data.fill_(1000.0)
+    quantization_module_stage1_zero.thresholds.data.fill_(0.0)
     quantized_model_stage1_zero = QuantizedEmbeddingModelStage1(
         embedding_model=embedding_model,
         quantization_module=quantization_module_stage1_zero
@@ -373,7 +373,7 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
     print("  Evaluating Stage1 Trained...")
     quantization_module_stage1_trained = QuantizationModuleStage1(embedding_dim)
     quantization_module_stage1_trained.load_state_dict(
-        torch.load('saved_models/run_20241121_175510/quantization_stage1.pth', map_location=device)
+        torch.load('saved_models/run_20241123_0913/quantization_stage1.pth', map_location=device)
     )
     # print(quantization_module_stage1_trained.thresholds)
     quantization_module_stage1_trained.to(device)
@@ -389,12 +389,31 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         results_dir=results_dir
     )
     task_results['QuantStage1_Trained'] = results_stage1_trained
+    
+    # 3.5 Stage2 Untrained
+    print("  Evaluating Stage2 Untrained...")
+    quantization_module_stage2_untrained = QuantizationModuleStage2(embedding_dim)
+    quantization_module_stage2_untrained.thresholds_first_half.data.fill_(0.0)
+    quantization_module_stage2_untrained.thresholds_second_half.data.fill_(0.0)
+    quantization_module_stage2_untrained.to(device)
+    quantization_module_stage2_untrained.eval()
+    quantized_model_stage2_untrained = QuantizedEmbeddingModelStage2(
+        embedding_model=embedding_model,
+        quantization_module=quantization_module_stage2_untrained
+    )
+    results_stage2_untrained = evaluate_model_on_tasks(
+        model=quantized_model_stage2_untrained,
+        tasks=[task],
+        model_name='QuantStage2_Untrained',
+        results_dir=results_dir
+    )
+    task_results['QuantStage2_Untrained'] = results_stage2_untrained
 
     # 4. Stage2 Trained
     print("  Evaluating Stage2 Trained...")
     quantization_module_stage2_trained = QuantizationModuleStage2(embedding_dim)
     quantization_module_stage2_trained.load_state_dict(
-        torch.load('saved_models/run_20241121_175516/quantization_stage2.pth', map_location=device)
+        torch.load('saved_models/run_20241123_0913/quantization_stage2.pth', map_location=device)
     )
     # print(quantization_module_stage2_trained.thresholds_first_half)
     # print(quantization_module_stage2_trained.thresholds_second_half)
@@ -480,6 +499,7 @@ def main():
         'Original': [],
         'QuantStage1_Untrained': [],
         'QuantStage1_Trained': [],
+        'QuantStage2_Untrained': [],
         'QuantStage2_Trained': []
     }
 

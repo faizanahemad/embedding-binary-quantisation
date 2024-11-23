@@ -59,7 +59,7 @@ class CombinedSimilarityDataset(Dataset):
         for config in dataset_configs:  
             dataset = load_dataset(config['name'], config['config'], split=config['split'])  
             if max_samples_per_dataset:  
-                dataset = dataset.shuffle(seed=42).select(range(max_samples_per_dataset))  
+                dataset = dataset.shuffle(seed=42).select(range(min(len(dataset), max_samples_per_dataset)))  
             samples = config['loader_function'](dataset)  
             self.samples.extend(samples)  
   
