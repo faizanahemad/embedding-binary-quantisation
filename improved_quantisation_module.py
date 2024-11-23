@@ -143,6 +143,7 @@ class ImprovedQuantizationModule(nn.Module):
         
         # Compute quantization thresholds using second-order information
         if self.training:
+            scaled_embeddings.retain_grad()
             # Approximate Hessian diagonal
             grad_sq = torch.pow(scaled_embeddings.grad, 2) if scaled_embeddings.grad is not None else torch.ones_like(scaled_embeddings)
             hessian_diag = grad_sq.mean(0)
@@ -173,7 +174,7 @@ class ImprovedQuantizationModule(nn.Module):
 
     
     
-    def prune_dimensions(self, threshold=0.1):
+    def prune_dimensions(self, threshold=0.0):
         """
         Zero out scales for pruned dimensions instead of removing them
         Permanent prune dimensions with low importance.
@@ -183,7 +184,8 @@ class ImprovedQuantizationModule(nn.Module):
         Later dimensions have higher thresholds (easier to prune).
         """
         position_adjusted_threshold = threshold / self.position_importance
-        new_mask = self.importance_scores > position_adjusted_threshold
+        new_mask = self.importance_scores >= position_adjusted_threshold
+        new_mask = torch.ones_like(self.importance_scores, dtype=torch.bool)
         self.pruning_mask.data = new_mask
         # Zero out scales for pruned dimensions
         self.scales.data = self.scales.data * new_mask
@@ -238,10 +240,11 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
                     input_ids=input_ids,
                     attention_mask=attention_mask
                 )
-                embeddings = model_output.last_hidden_state.mean(dim=1)
-            
+                
+            embeddings = model_output.last_hidden_state.mean(dim=1)
             # Enable gradient tracking for importance scoring
             embeddings.requires_grad_(True)
+            embeddings.retain_grad()  # Add this line
             
             # Forward pass through quantization module
             quantized_embeddings = quantization_module(embeddings)
@@ -302,10 +305,10 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
         
         # Prune dimensions if we're past halfway and loss is stable
         if epoch > num_epochs // 2:
-            current_dims = quantization_module.thresholds.shape[0]
+            current_dims = quantization_module.pruning_mask.sum().item()
             threshold = 0.1 * (1 + epoch / num_epochs)  # Gradually increase threshold
             mask = quantization_module.prune_dimensions(threshold=threshold)
-            pruned_dims = current_dims - quantization_module.thresholds.shape[0]
+            pruned_dims = current_dims - quantization_module.pruning_mask.sum().item()
             
             print(f'Pruned {pruned_dims} dimensions. '
                   f'Current embedding size: {quantization_module.thresholds.shape[0]}')

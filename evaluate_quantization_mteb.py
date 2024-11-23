@@ -38,8 +38,9 @@ import pandas as pd
 from datetime import datetime  
   
 # Assuming QuantizationModuleStage1 and QuantizationModuleStage2 are defined in quantization_modules.py  
+from improved_quantisation_module import ImprovedQuantizationModule
 from quantization_modules import QuantizationModuleStage1, QuantizationModuleStage2  
-
+from config import save_dir
 batch_size = 512
   
   
@@ -212,6 +213,67 @@ class QuantizedEmbeddingModelStage2(Wrapper, Encoder):
         # if kwargs.get('normalize_embeddings', True):  
         #     quantized_embeddings = quantized_embeddings / np.linalg.norm(quantized_embeddings, axis=1, keepdims=True)  
         return quantized_embeddings  
+    
+    
+class QuantizedEmbeddingModelStage3(Wrapper, Encoder):  
+    """  
+    Embedding model with ImprovedQuantizationModule applied.  
+  
+    This model applies Stage 3 quantization to the embeddings.  
+    """
+    
+    def __init__(self, embedding_model: SentenceTransformer, quantization_module: QuantizationModuleStage2):  
+        self.embedding_model = embedding_model  
+        self.model = embedding_model
+        self.model.to(device)  # Move embedding model to GPU
+        self.quantization_module = quantization_module
+        self.quantization_module.to(device)  # Move quantization module to GPU
+        
+        
+        self.model_card_data = {
+            "model_name": "QuantizedEmbeddingModelStage3",
+            "base_model": "QuantizedEmbeddingModelStage3",
+            "model_name": "QuantizedEmbeddingModelStage3",
+            "base_model_revision": None,
+            "language": ["en"],
+            "similarity_fn_name": "cos_sim",
+            "license": "apache-2.0",
+            "pipeline_tag": "sentence-similarity"
+        }
+
+  
+    def encode(self, sentences: List[str], **kwargs) -> np.ndarray:  
+        """  
+        Encode sentences into quantized embeddings.  
+  
+        Args:  
+            sentences (List[str]): List of sentences to encode.  
+  
+        Returns:  
+            np.ndarray: Array of quantized embeddings.  
+        """  
+        # Get embeddings from the base model  
+        embeddings = self.embedding_model.encode(  
+            sentences,  
+            show_progress_bar=kwargs.get('show_progress_bar', False),  
+            # batch_size=kwargs.get('batch_size', 32),  
+            encode_kwargs = {'batch_size': kwargs.get('batch_size', batch_size)},
+            normalize_embeddings=False  # Do not normalize before quantization  
+        )  
+        embeddings = torch.tensor(embeddings).to(device) 
+        # print few embeddings to check if they are in the correct range
+        # print(embeddings[:5])
+        # Apply quantization  
+        with torch.no_grad():  
+            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy()
+        # assert quantized_embeddings only contains 0, 1
+        assert np.all(np.isin(quantized_embeddings, [0, 1]))
+        # print(quantized_embeddings[:5])
+        # Optionally normalize embeddings  
+        # if kwargs.get('normalize_embeddings', True):  
+        #     quantized_embeddings = quantized_embeddings / np.linalg.norm(quantized_embeddings, axis=1, keepdims=True)  
+        return quantized_embeddings 
+      
   
 def evaluate_model_on_tasks(model, tasks: List[str], model_name: str, results_dir: str) -> Dict:  
     """  
@@ -373,7 +435,7 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
     print("  Evaluating Stage1 Trained...")
     quantization_module_stage1_trained = QuantizationModuleStage1(embedding_dim)
     quantization_module_stage1_trained.load_state_dict(
-        torch.load('saved_models/run_20241123_0913/quantization_stage1.pth', map_location=device)
+        torch.load(f'saved_models/{save_dir}/quantization_stage1.pth', map_location=device)
     )
     # print(quantization_module_stage1_trained.thresholds)
     quantization_module_stage1_trained.to(device)
@@ -413,10 +475,8 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
     print("  Evaluating Stage2 Trained...")
     quantization_module_stage2_trained = QuantizationModuleStage2(embedding_dim)
     quantization_module_stage2_trained.load_state_dict(
-        torch.load('saved_models/run_20241123_0913/quantization_stage2.pth', map_location=device)
+        torch.load(f'saved_models/{save_dir}/quantization_stage2.pth', map_location=device)
     )
-    # print(quantization_module_stage2_trained.thresholds_first_half)
-    # print(quantization_module_stage2_trained.thresholds_second_half)
     
     quantization_module_stage2_trained.to(device)
     quantization_module_stage2_trained.eval()
@@ -431,6 +491,27 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         results_dir=results_dir
     )
     task_results['QuantStage2_Trained'] = results_stage2_trained
+    
+    # 5. Stage3 Trained
+    print("  Evaluating Stage3 Trained...")
+    quantization_module_stage3_trained = ImprovedQuantizationModule(embedding_dim)
+    quantization_module_stage3_trained.load_state_dict(
+        torch.load(f'saved_models/{save_dir}/improved_quantization.pth', map_location=device)
+    )
+    
+    quantization_module_stage3_trained.to(device)
+    quantization_module_stage3_trained.eval()
+    quantized_model_stage3_trained = QuantizedEmbeddingModelStage3(
+        embedding_model=embedding_model,
+        quantization_module=quantization_module_stage3_trained
+    )
+    results_stage3_trained = evaluate_model_on_tasks(
+        model=quantized_model_stage3_trained,
+        tasks=[task],
+        model_name='QuantStage3_Trained',
+        results_dir=results_dir
+    )
+    task_results['QuantStage3_Trained'] = results_stage3_trained
 
     # Print individual task results
     df_task_results = aggregate_results(task_results, [task])
@@ -500,7 +581,8 @@ def main():
         'QuantStage1_Untrained': [],
         'QuantStage1_Trained': [],
         'QuantStage2_Untrained': [],
-        'QuantStage2_Trained': []
+        'QuantStage2_Trained': [],
+        'QuantStage3_Trained': []
     }
 
     # Evaluate each task individually
