@@ -54,6 +54,141 @@ class CombinedSimilarityDataset(Dataset):
                 'loader_function': self.load_snli  
             },  
             # Add more datasets as needed  
+            
+            # Natural Questions (Query-Passage)
+            {
+                'name': 'natural_questions',
+                'config': 'default',
+                'split': 'train',
+                'loader_function': self.load_natural_questions
+            },
+            # MRPC (Microsoft Research Paraphrase Corpus)
+            {
+                'name': 'glue',
+                'config': 'mrpc',
+                'split': 'train',
+                'loader_function': self.load_mrpc
+            },
+            # PAWS (Paraphrase Adversaries from Word Scrambling)
+            {
+                'name': 'paws',
+                'config': 'labeled_final',
+                'split': 'train',
+                'loader_function': self.load_paws
+            },
+            # MultiNews (Document-Document Similarity)
+            {
+                'name': 'multi_news',
+                'config': None,
+                'split': 'train',
+                'loader_function': self.load_multi_news
+            },
+            # Wiki-CS (Wikipedia Sections Similarity)
+            {
+                'name': 'wiki_snippets',
+                'config': 'wiki_cs',
+                'split': 'train',
+                'loader_function': self.load_wiki_snippets
+            },
+            
+            # TriviaQA (Query-Document)
+            {
+                'name': 'trivia_qa',
+                'config': 'rc.wikipedia',
+                'split': 'train',
+                'loader_function': self.load_trivia_qa
+            },
+            # HotpotQA (Multi-hop Query-Document)
+            {
+                'name': 'hotpot_qa',
+                'config': 'distractor',
+                'split': 'train',
+                'loader_function': self.load_hotpot_qa
+            },
+            # XNLI (Cross-lingual Natural Language Inference)
+            {
+                'name': 'xnli',
+                'config': 'all_languages',
+                'split': 'train',
+                'loader_function': self.load_xnli
+            },
+            # CodeSearchNet (Code-Documentation Similarity)
+            {
+                'name': 'code_search_net',
+                'config': 'python',
+                'split': 'train',
+                'loader_function': self.load_code_search_net
+            },
+            # S2ORC (Scientific Paper Similarity)
+            {
+                'name': 's2orc',
+                'config': 'full',
+                'split': 'train',
+                'loader_function': self.load_s2orc
+            },
+            # CNN/DailyMail (News Article Similarity)
+            {
+                'name': 'cnn_dailymail',
+                'config': '3.0.0',
+                'split': 'train',
+                'loader_function': self.load_cnn_dailymail
+            },
+            # Twitter Paraphrase Corpus
+            {
+                'name': 'twitter_pairs',
+                'config': None,
+                'split': 'train',
+                'loader_function': self.load_twitter_pairs
+            },
+            # Amazon Product Reviews
+            {
+                'name': 'amazon_reviews_multi',
+                'config': 'en',
+                'split': 'train',
+                'loader_function': self.load_amazon_reviews
+            },
+            # Legal-BERT Dataset
+            {
+                'name': 'legal_bert',
+                'config': None,
+                'split': 'train',
+                'loader_function': self.load_legal_bert
+            },
+            # WikiHow (Step Similarity)
+            {
+                'name': 'wikihow',
+                'config': 'all',
+                'split': 'train',
+                'loader_function': self.load_wikihow
+            },
+            # Stack Exchange (Question Similarity)
+            {
+                'name': 'stack_exchange',
+                'config': 'paired',
+                'split': 'train',
+                'loader_function': self.load_stack_exchange
+            },
+            # Common Crawl News (Article Similarity)
+            {
+                'name': 'cc_news',
+                'config': None,
+                'split': 'train',
+                'loader_function': self.load_cc_news
+            },
+            # ArXiv Dataset (Academic Paper Similarity)
+            {
+                'name': 'arxiv_dataset',
+                'config': None,
+                'split': 'train',
+                'loader_function': self.load_arxiv
+            },
+            # Reddit TIFU (Story Similarity)
+            {
+                'name': 'reddit_tifu',
+                'config': 'long',
+                'split': 'train',
+                'loader_function': self.load_reddit_tifu
+            }
         ]  
   
         for config in dataset_configs:  
@@ -145,6 +280,223 @@ class CombinedSimilarityDataset(Dataset):
                 hypothesis = example['hypothesis']  
                 samples.append((premise, hypothesis))  
         return samples  
+    
+    def load_trivia_qa(self, dataset):
+        """
+        Loads TriviaQA dataset for complex query-document pairs.
+        """
+        samples = []
+        for example in dataset:
+            question = example['question']
+            for evidence in example['evidence']:
+                if evidence['text'].strip():
+                    samples.append((question, evidence['text']))
+        return samples
+
+    def load_hotpot_qa(self, dataset):
+        """
+        Loads HotpotQA dataset for multi-hop reasoning pairs.
+        """
+        samples = []
+        for example in dataset:
+            question = example['question']
+            context = ' '.join([p[0] for p in example['context'] if p[0].strip()])
+            if context:
+                samples.append((question, context))
+        return samples
+
+    def load_xnli(self, dataset):
+        """
+        Loads XNLI dataset for cross-lingual similarity.
+        """
+        samples = []
+        for example in dataset:
+            if example['label'] == 0:  # entailment
+                samples.append((example['premise'], example['hypothesis']))
+        return samples
+
+    def load_code_search_net(self, dataset):
+        """
+        Loads CodeSearchNet for code-documentation similarity.
+        """
+        samples = []
+        for example in dataset:
+            if example['docstring'] and example['code']:
+                samples.append((example['docstring'], example['code']))
+        return samples
+
+    def load_s2orc(self, dataset):
+        """
+        Loads S2ORC dataset for scientific paper similarity.
+        """
+        samples = []
+        for example in dataset:
+            if example['abstract'] and example['body_text']:
+                # Create pairs from abstract and relevant sections
+                abstract = example['abstract']
+                sections = example['body_text'].split('\n\n')
+                for section in sections:
+                    if len(section) > 100:  # Filter short sections
+                        samples.append((abstract, section))
+        return samples
+
+    def load_cnn_dailymail(self, dataset):
+        """
+        Loads CNN/DailyMail dataset for news article similarity.
+        """
+        samples = []
+        for example in dataset:
+            article_parts = example['article'].split('\n')
+            for i in range(len(article_parts)-1):
+                if len(article_parts[i]) > 50 and len(article_parts[i+1]) > 50:
+                    samples.append((article_parts[i], article_parts[i+1]))
+        return samples
+
+    def load_twitter_pairs(self, dataset):
+        """
+        Loads Twitter paraphrase pairs.
+        """
+        samples = []
+        for example in dataset:
+            if example['is_paraphrase']:
+                samples.append((example['tweet1'], example['tweet2']))
+        return samples
+
+    def load_amazon_reviews(self, dataset):
+        """
+        Loads Amazon product reviews for text similarity.
+        """
+        samples = []
+        for example in dataset:
+            if example['stars'] >= 4:  # Use highly rated products
+                # Create pairs from review title and body
+                samples.append((example['review_title'], example['review_body']))
+        return samples
+
+    def load_legal_bert(self, dataset):
+        """
+        Loads legal document pairs for similarity.
+        """
+        samples = []
+        for example in dataset:
+            if example['similarity_score'] > 0.7:
+                samples.append((example['document1'], example['document2']))
+        return samples
+
+    def load_wikihow(self, dataset):
+        """
+        Loads WikiHow steps for procedural similarity.
+        """
+        samples = []
+        for example in dataset:
+            steps = example['text'].split('\n')
+            for i in range(len(steps)-1):
+                if len(steps[i]) > 30 and len(steps[i+1]) > 30:
+                    samples.append((steps[i], steps[i+1]))
+        return samples
+
+    def load_stack_exchange(self, dataset):
+        """
+        Loads Stack Exchange similar questions.
+        """
+        samples = []
+        for example in dataset:
+            if example['score'] > 0:  # Use positively scored pairs
+                samples.append((example['question1'], example['question2']))
+        return samples
+
+    def load_cc_news(self, dataset):
+        """
+        Loads Common Crawl news articles.
+        """
+        samples = []
+        for example in dataset:
+            if example['text'] and example['title']:
+                # Create pairs from title and first paragraph
+                paragraphs = example['text'].split('\n\n')
+                if paragraphs:
+                    samples.append((example['title'], paragraphs[0]))
+        return samples
+
+    def load_arxiv(self, dataset):
+        """
+        Loads arXiv papers for academic text similarity.
+        """
+        samples = []
+        for example in dataset:
+            if example['abstract'] and example['title']:
+                samples.append((example['title'], example['abstract']))
+        return samples
+
+    def load_reddit_tifu(self, dataset):
+        """
+        Loads Reddit TIFU posts for story similarity.
+        """
+        samples = []
+        for example in dataset:
+            if example['title'] and example['post']:
+                # Create pairs from title and post body
+                samples.append((example['title'], example['post']))
+        return samples
+    
+    def load_natural_questions(self, dataset):
+        """
+        Loads Natural Questions dataset for query-passage pairs.
+        """
+        samples = []
+        for example in dataset:
+            if example['annotations']['yes_no_answer'][0] != 'NONE':
+                question = example['question']['text']
+                # Use the long answer as the positive passage
+                if example['annotations']['long_answer'][0]:
+                    answer = example['document']['text'][example['annotations']['long_answer'][0]['start_token']:
+                                                    example['annotations']['long_answer'][0]['end_token']]
+                    samples.append((question, answer))
+        return samples
+
+    def load_mrpc(self, dataset):
+        """
+        Loads Microsoft Research Paraphrase Corpus.
+        """
+        samples = []
+        for example in dataset:
+            if example['label'] == 1:  # Paraphrase pairs
+                samples.append((example['sentence1'], example['sentence2']))
+        return samples
+
+    def load_paws(self, dataset):
+        """
+        Loads PAWS dataset for challenging paraphrase detection.
+        """
+        samples = []
+        for example in dataset:
+            if example['label'] == 1:  # Paraphrase pairs
+                samples.append((example['sentence1'], example['sentence2']))
+        return samples
+
+    def load_multi_news(self, dataset):
+        """
+        Loads MultiNews dataset for document similarity.
+        """
+        samples = []
+        for example in dataset:
+            # Split document into paragraphs and create pairs of related paragraphs
+            documents = example['document'].split('\n\n')
+            for i in range(len(documents)-1):
+                if len(documents[i]) > 50 and len(documents[i+1]) > 50:  # Filter short paragraphs
+                    samples.append((documents[i], documents[i+1]))
+        return samples
+
+    def load_wiki_snippets(self, dataset):
+        """
+        Loads Wikipedia sections dataset for paragraph similarity.
+        """
+        samples = []
+        for example in dataset:
+            if 'section_text' in example and 'context' in example:
+                # Section text and its context are semantically related
+                samples.append((example['section_text'], example['context']))
+        return samples
   
     def __len__(self):  
         return len(self.samples) * 2  # Because we place positive pairs consecutively  
@@ -177,100 +529,3 @@ class CombinedSimilarityDataset(Dataset):
         # Remove the batch dimension added by return_tensors='pt'
         return {k: v.squeeze(0) for k, v in encoded.items()}
 
-
-class GeneralizedPairDataset(Dataset):  
-    """  
-    Generalized Dataset that can handle various types of datasets and combine them.  
-  
-    The dataset ensures that positive pairs (e.g., query and corresponding passage) come consecutively.  
-    """  
-  
-    def __init__(self, datasets_list, tokenizer, max_length=128):  
-        """  
-        Initializes the dataset.  
-  
-        Args:  
-            datasets_list (list): List of dataset names to be loaded from Hugging Face datasets.  
-            tokenizer (transformers.Tokenizer): Tokenizer to be used.  
-            max_length (int): Maximum token length for truncation/padding.  
-        """  
-        self.examples = []  
-        self.tokenizer = tokenizer  
-        self.max_length = max_length  
-  
-        for dataset_name in datasets_list:  
-            print(f"Loading dataset: {dataset_name}")  
-            dataset = load_dataset(dataset_name)  
-  
-            # Process dataset based on its format  
-            if dataset_name == 'ms_marco':  
-                # Handle MS MARCO dataset  
-                self.process_ms_marco(dataset)  
-            elif dataset_name == 'glue':  
-                # Handle GLUE datasets like QQP  
-                self.process_qqp(dataset['qqp'])  
-            elif dataset_name == 'quora':  
-                # Handle Quora Question Pairs  
-                self.process_quora(dataset)  
-            # Add more datasets as needed  
-            else:  
-                print(f"Dataset {dataset_name} not specifically handled. Skipping.")  
-  
-    def process_ms_marco(self, dataset):  
-        """  
-        Processes the MS MARCO dataset.  
-  
-        Args:  
-            dataset (DatasetDict): MS MARCO dataset loaded from Hugging Face datasets.  
-        """  
-        # Assuming 'train' split and 'query' and 'passage' fields  
-        for item in dataset['train']:  
-            query = item['query']  
-            passage = item['passage']  
-            # Append query and passage as consecutive pairs  
-            self.examples.append(query)  
-            self.examples.append(passage)  
-  
-    def process_qqp(self, dataset):  
-        """  
-        Processes the QQP dataset.  
-  
-        Args:  
-            dataset (Dataset): QQP dataset loaded from Hugging Face datasets.  
-        """  
-        for item in dataset:  
-            if item['label'] == 1:  # Only positive pairs  
-                question1 = item['question1']  
-                question2 = item['question2']  
-                # Append question pairs as consecutive items  
-                self.examples.append(question1)  
-                self.examples.append(question2)  
-  
-    def process_quora(self, dataset):  
-        """  
-        Processes the Quora Question Pairs dataset.  
-  
-        Args:  
-            dataset (DatasetDict): Quora dataset loaded from Hugging Face datasets.  
-        """  
-        # Similar to QQP processing  
-        for item in dataset['train']:  
-            if item['is_duplicate'] == 1:  
-                question1 = item['questions']['text'][item['questions']['id'].index(item['qid1'])]  
-                question2 = item['questions']['text'][item['questions']['id'].index(item['qid2'])]  
-                self.examples.append(question1)  
-                self.examples.append(question2)  
-  
-    def __len__(self):  
-        return len(self.examples)  
-  
-    def __getitem__(self, idx):  
-        text = self.examples[idx]  
-        encoded = self.tokenizer(  
-            text,  
-            return_tensors='pt',  
-            truncation=True,  
-            padding='max_length',  
-            max_length=self.max_length  
-        )  
-        return encoded  
