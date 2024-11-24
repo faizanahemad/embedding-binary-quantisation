@@ -45,7 +45,7 @@ Your concept revolves around enhancing the efficiency of embedding vectors by co
    - **Information Loss**: Combining dimensions may lead to loss of important variance.
    - **Correlation Between Dimensions**: Highly correlated dimensions may reduce quantization effectiveness.
 
-#### Stage 3: Neural Network Compression
+#### Stage Later (TBD): Neural Network Compression
 1. **Concept**: Train a neural network to transform high-dimensional embeddings into smaller binary embeddings, addressing the challenge of discrete outputs.
 2. **Implementation**:
    - **Network Design**: Design a neural network that reduces dimensionality and outputs binary values.
@@ -56,7 +56,194 @@ Your concept revolves around enhancing the efficiency of embedding vectors by co
    - **Performance Degradation**: Reduced dimensionality and binarization may lead to information loss.
    - **Training Stability**: Ensuring stable and convergent training due to gradient approximation.
 
-### Implementation Strategy
+# Improved Binary Quantization with Adaptive Pruning
+
+Our improved binary quantization method advances beyond simple thresholding (x > 0 ? 1 : 0) and learned per-dimension thresholds by introducing a sophisticated system combining adaptive scaling, intelligent pruning, and soft quantization training. At its core, the method learns both per-dimension scales (s) and thresholds (t), where scales help normalize dimension importance and thresholds adapt to the data distribution. The forward pass involves scaling the input embeddings (x̂ = x ⊙ (s ⊙ m)), adjusting thresholds using Hessian information (t̂ = t ⊙ √(diag(H) + ε)), and applying soft quantization through a temperature-controlled sigmoid (q = σ((x̂ - t̂)/τ)). Importance scores are computed using a combination of gradient magnitude, feature magnitude, and historical information (α = λ₁|∇x| + λ₂|x| + λ₃α_{t-1}), which then influence both the quantization process and pruning decisions. The training employs three loss components: similarity preservation (cosine similarity), regularization (keeping thresholds small and scales near unity), and entropy loss (pushing outputs toward binary values). Position-aware pruning is implemented where earlier dimensions are harder to prune (threshold_i = base_threshold / exp(-decay * i)), and pruning only begins after half the training epochs.
+
+The training process starts with initialization (thresholds ≈ N(0, 0.01), scales = 1, importance scores = 1, temperature = 0.1) and progresses through two phases: first focusing on learning scales/thresholds, then introducing progressive dimension pruning. Key hyperparameters include dimension_importance_decay = 0.01 and importance_momentum = 0.99, with the temperature parameter controlling the smoothness of quantization. The method maintains running averages of importance scores for stability and uses second-order (Hessian) information to optimize quantization points. During training, dimensions are pruned based on their importance scores, with the pruning threshold gradually increasing with epochs (threshold = 0.1 * (1 + epoch / num_epochs)). Rather than removing pruned dimensions, their scales are zeroed out to maintain dimensional compatibility. The method draws inspiration from GPTQ for quantization, Movement Pruning for importance scoring, and employs the Straight-Through Estimator concept for training. This approach achieves better quantization by adapting to data distribution, enables efficient compression through intelligent pruning, and maintains training stability through its soft quantization process and multiple loss components. The entire system is designed to automatically handle device placement, track active dimensions, record importance scores, and monitor various loss components, making it both theoretically sound and practically implementable.
+
+The implementation includes several crucial details for robustness and efficiency. The Hessian diagonal approximation is computed after each backward pass and maintained with exponential moving average (momentum = 0.9) to ensure stability. The importance scores combine both local and temporal information, where local importance is computed from current batch gradients and magnitudes, while temporal consistency is maintained through momentum averaging. The entropy loss weight is gradually increased (min(0.1, 0.01 * epoch)) to allow initial flexibility in learning and later encourage binary outputs. During inference, the quantized embeddings can be efficiently compared using Hamming distance (XOR + popcount) operations, as the output is binary. The pruning mask is maintained as a boolean tensor and applied both to scales and importance scores, ensuring pruned dimensions remain pruned. The position importance decay (exp(-dimension_importance_decay * dimension_index)) creates a natural bias towards keeping earlier dimensions, which typically contain more important information in many embedding models. Training statistics are comprehensively tracked, including per-epoch losses, importance score evolution, pruning ratios, and temperature values, enabling detailed analysis of the quantization process. The method also includes gradient clipping (max_norm=1.0) to prevent training instability and uses careful device management to ensure efficient GPU utilization.
+
+## Motivation & Background
+
+Our improved binary quantization method addresses key limitations of previous approaches:
+
+1. **Method 1 (Simple Thresholding)**:
+   - Uses fixed threshold (e.g., 0) for all dimensions
+   - Ignores importance of different dimensions
+   - No adaptation to data distribution
+   - Binary output: x > 0 ? 1 : 0
+
+2. **Method 2 (Learned Thresholds)**:
+   - Learns per-dimension thresholds
+   - Still treats all dimensions equally
+   - No pruning of less important dimensions
+   - Binary output: x > threshold ? 1 : 0
+
+## Key Innovations
+
+Our method introduces several key improvements:
+
+1. **Adaptive Scaling & Thresholds**:
+   - Learnable per-dimension scales (s) and thresholds (t)
+   - Scales help normalize dimension importance
+   - Thresholds adapt to data distribution
+   - Second-order (Hessian) information for optimal quantization points
+
+2. **Intelligent Dimension Pruning**:
+   - Gradient and magnitude-based importance scoring
+   - Position-aware pruning (early dims harder to prune)
+   - Momentum-averaged importance scores for stability
+   - Progressive pruning during training
+
+3. **Soft Quantization Training**:
+   - Temperature-based sigmoid activation
+   - Smooth transition from continuous to binary
+   - Better gradient flow during training
+
+## Mathematical Formulation
+
+### Forward Pass
+For input embedding x ∈ ℝᵈ:
+
+1. **Scaling**: 
+   ```
+   x̂ = x ⊙ (s ⊙ m)
+   ```
+   where s are learnable scales and m is pruning mask
+
+2. **Threshold Adjustment**:
+   ```
+   t̂ = t ⊙ √(diag(H) + ε)
+   ```
+   where H is Hessian approximation
+
+3. **Soft Quantization**:
+   ```
+   q = σ((x̂ - t̂)/τ)
+   ```
+   where τ is temperature
+
+4. **Importance Weighting**:
+   ```
+   y = q ⊙ σ(α/τ)
+   ```
+   where α are importance scores
+
+5. **Binary Output**:
+   ```
+   b = 1[y > 0.5]
+   ```
+   during inference
+
+### Importance Score Computation
+
+α = λ₁|∇x| + λ₂|x| + λ₃α_{t-1}
+
+where:
+- |∇x|: gradient-based importance
+- |x|: magnitude-based importance  
+- α_{t-1}: historical importance
+
+### Position-Aware Pruning
+threshold_i = base_threshold / exp(-decay i)
+
+where i is dimension index
+
+## Training Objectives
+
+Total loss combines multiple components:
+
+L = L_sim + L_reg + L_entropy
+
+
+1. **Similarity Preservation Loss**:
+   ```
+   L_sim = 1 - cosine_similarity(x, q)
+   ```
+
+2. **Regularization Loss**:
+   ```
+   L_reg = λ * Σ(α_i * (||t||₂ + ||abs(s) - 1||₂))
+   ```
+   - Keeps thresholds small
+   - Encourages unit scaling
+   - Weighted by importance scores
+
+3. **Entropy Loss**:
+   ```
+   L_entropy = -Σ(q*log(q) + (1-q)*log(1-q))
+   ```
+   - Pushes outputs toward 0/1
+   - Weight increases during training
+
+## Training Process
+
+1. **Initialization**:
+   - Thresholds ≈ N(0, 0.01)
+   - Scales = 1
+   - Importance scores = 1
+   - Temperature = 0.1
+
+2. **Progressive Training**:
+   - First half: Focus on learning scales/thresholds
+   - Second half: Begin pruning dimensions
+   - Gradually increase entropy loss weight
+   - Maintain running average of importance scores
+
+3. **Pruning Strategy**:
+   - Start pruning after epoch num_epochs//2
+   - Threshold increases with epochs
+   - Early dimensions harder to prune
+   - Zero out scales for pruned dimensions
+
+## Advantages
+
+1. **Better Quantization**:
+   - Adapts to data distribution
+   - Uses second-order information
+   - Learnable scaling per dimension
+
+2. **Efficient Compression**:
+   - Removes less important dimensions
+   - Position-aware pruning preserves key information
+   - Maintains temporal consistency
+
+3. **Training Stability**:
+   - Smooth quantization process
+   - Multiple loss components
+   - Momentum-based importance scoring
+
+4. **Theoretical Foundations**:
+   - Based on GPTQ for quantization
+   - Movement Pruning for importance
+   - Straight-Through Estimator concepts
+
+## Implementation Details
+
+1. **Hyperparameters**:
+   - dimension_importance_decay = 0.01
+   - importance_momentum = 0.99
+   - reg_strength = configurable
+   - initial_temperature = 0.1
+
+2. **Device Handling**:
+   - All tensors automatically moved to correct device
+   - Efficient pruning without dimension removal
+   - Gradient tracking for importance computation
+
+3. **Monitoring**:
+   - Tracks active dimensions
+   - Records importance scores
+   - Monitors loss components
+   - Saves pruning statistics
+
+This improved method combines ideas from quantization literature, pruning research, and information theory to create an adaptive, efficient binary quantization system that outperforms simpler approaches while maintaining embedding effectiveness.
+
+
+-----------
+
+# Implementation Strategy
 
 1. **Data Analysis**:
    - Analyze the distribution of embedding values to determine initial parameters for quantization and dimensionality reduction.

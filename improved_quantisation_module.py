@@ -95,7 +95,7 @@ class ImprovedQuantizationModule(nn.Module):
         # Learnable parameters for sophisticated quantization
         self.thresholds = nn.Parameter(torch.zeros(embedding_dim))
         self.scales = nn.Parameter(torch.ones(embedding_dim))
-        self.pruning_mask = torch.ones(embedding_dim, dtype=torch.bool)  # False for pruned dims
+        self.register_buffer('pruning_mask', torch.ones(embedding_dim, dtype=torch.bool))  # False for pruned dims
         
         
         # Importance scores for dimension pruning
@@ -108,8 +108,11 @@ class ImprovedQuantizationModule(nn.Module):
                                      torch.arange(embedding_dim, dtype=torch.float32))
         self.register_buffer('position_importance', position_importance)
         
+        self.register_buffer('hessian_diag', torch.ones(embedding_dim))  # Add this
+
+        
         # Temperature parameter for soft pruning
-        self.temperature = 1.0
+        self.temperature = 0.1
         self.importance_momentum = 0.99
     
     def compute_importance_scores(self, embeddings):
@@ -136,7 +139,7 @@ class ImprovedQuantizationModule(nn.Module):
             torch.Tensor: Quantized embeddings
         """
         # Apply learned scaling
-        self.pruning_mask = self.pruning_mask.to(embeddings.device)
+        # self.pruning_mask = self.pruning_mask.to(embeddings.device)
         # print(f'pruning mask: {self.pruning_mask.device}, scales: {self.scales.device}, thresholds: {self.thresholds.device}')
         effective_scales = self.scales * self.pruning_mask
         scaled_embeddings = embeddings * torch.abs(effective_scales)
@@ -145,11 +148,14 @@ class ImprovedQuantizationModule(nn.Module):
         if self.training:
             scaled_embeddings.retain_grad()
             # Approximate Hessian diagonal
-            grad_sq = torch.pow(scaled_embeddings.grad, 2) if scaled_embeddings.grad is not None else torch.ones_like(scaled_embeddings)
-            hessian_diag = grad_sq.mean(0)
+            # Wrong way to compute hessian diagonal, needs to be updated after backward pass
+            # grad_sq = torch.pow(scaled_embeddings.grad, 2) if scaled_embeddings.grad is not None else torch.ones_like(scaled_embeddings)
+            # hessian_diag = grad_sq.mean(0)
+            
+            # print(f'hessian diag: {hessian_diag.device}, values: {hessian_diag}')
             
             # Adjust thresholds based on Hessian
-            adjusted_thresholds = self.thresholds * torch.sqrt(hessian_diag + 1e-6)
+            adjusted_thresholds = self.thresholds * torch.sqrt(self.hessian_diag + 1e-6)
         else:
             adjusted_thresholds = self.thresholds
 
@@ -171,6 +177,14 @@ class ImprovedQuantizationModule(nn.Module):
         if binary:
             return (quantized > 0.5).float()
         return quantized
+    
+    def update_hessian(self, scaled_embeddings):
+        """Update Hessian diagonal approximation using gradients"""
+        if scaled_embeddings.grad is not None:
+            grad_sq = torch.pow(scaled_embeddings.grad, 2)
+            new_hessian = grad_sq.mean(0)
+            # Use exponential moving average for stability
+            self.hessian_diag = 0.9 * self.hessian_diag + 0.1 * new_hessian.detach()
 
     
     
@@ -260,7 +274,7 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
             )
             
             # Binary entropy loss for encouraging discrete outputs
-            entropy_loss = -torch.mean(
+            entropy_loss = 0.01 * -torch.mean(
                 quantized_embeddings * torch.log(quantized_embeddings + 1e-6) +
                 (1 - quantized_embeddings) * torch.log(1 - quantized_embeddings + 1e-6)
             )
@@ -272,6 +286,9 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
             # Optimization step
             optimizer.zero_grad()
             loss.backward()
+            # Update Hessian diagonal after backward pass
+            quantization_module.update_hessian(embeddings)
+            
             
             # Gradient clipping to prevent instability
             torch.nn.utils.clip_grad_norm_(quantization_module.parameters(), max_norm=1.0)
@@ -297,11 +314,13 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
         avg_entropy_loss = total_entropy_loss / len(dataloader)
         
         # Update temperature with cosine annealing
-        progress = epoch / num_epochs
-        quantization_module.temperature = max(
-            0.1,  # Minimum temperature
-            0.5 * (1 + np.cos(np.pi * progress)) * 0.9  # Cosine decay from 0.9 to 0.1
-        )
+        # progress = epoch / num_epochs
+        # START_TEMP = 0.1  # Starting temperature
+        # END_TEMP = 0.05  # Ending temperature
+        # quantization_module.temperature = max(
+        #     END_TEMP,  # Minimum temperature
+        #     0.5 * (1 + np.cos(np.pi * progress)) * (START_TEMP - END_TEMP) + END_TEMP  # Cosine decay from START_TEMP to END_TEMP
+        # )
         
         # Prune dimensions if we're past halfway and loss is stable
         if epoch > num_epochs // 2:

@@ -122,7 +122,7 @@ class CombinedSimilarityDataset(Dataset):
         for example in dataset:  
             score = example['label']  
             # Use a threshold to consider as positive pairs  
-            if score >= 4.0:  # STS-B scores range from 0 to 5  
+            if score >= 3.0:  # STS-B scores range from 0 to 5  
                 sentence1 = example['sentence1']  
                 sentence2 = example['sentence2']  
                 samples.append((sentence1, sentence2))  

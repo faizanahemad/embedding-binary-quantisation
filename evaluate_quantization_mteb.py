@@ -39,8 +39,8 @@ from datetime import datetime
   
 # Assuming QuantizationModuleStage1 and QuantizationModuleStage2 are defined in quantization_modules.py  
 from improved_quantisation_module import ImprovedQuantizationModule
-from quantization_modules import QuantizationModuleStage1, QuantizationModuleStage2  
-from config import save_dir
+from train import QuantizationModuleStage1, QuantizationModuleStage2, QuantizationModuleStage1WithScales
+from config import save_dirs
 batch_size = 512
   
   
@@ -101,24 +101,27 @@ class OriginalEmbeddingModel(Wrapper, Encoder):
         
         return embeddings  
   
-class QuantizedEmbeddingModelStage1(Wrapper, Encoder):  
+
+class QuantizedEmbeddingModel(Wrapper, Encoder):  
     """  
-    Embedding model with QuantizationModuleStage1 applied.  
+    Embedding model with quantization applied.  
   
-    This model applies Stage 1 quantization to the embeddings.  
+    This model applies quantization to the embeddings.  
     """  
-    def __init__(self, embedding_model: SentenceTransformer, quantization_module: QuantizationModuleStage1):  
+    def __init__(self, embedding_model: SentenceTransformer, quantization_module):  
         self.embedding_model = embedding_model  
         self.model = embedding_model
         self.model.to(device)  # Move embedding model to GPU
         self.quantization_module = quantization_module
         self.quantization_module.to(device)  # Move quantization module to GPU
         self.model_card_data = {
-            "model_name": "QuantizedEmbeddingModelStage1",
-            "base_model": "QuantizedEmbeddingModelStage1",
+            "model_name": quantization_module.__class__.__name__,
+            "base_model": quantization_module.__class__.__name__,
             "base_model_revision": None,
             "language": ["en"],
-            "similarity_fn_name": "cos_sim"
+            "similarity_fn_name": "cos_sim",
+            "license": "apache-2.0",
+            "pipeline_tag": "sentence-similarity"
         }
 
   
@@ -136,144 +139,20 @@ class QuantizedEmbeddingModelStage1(Wrapper, Encoder):
         embeddings = self.embedding_model.encode(  
             sentences,  
             show_progress_bar=kwargs.get('show_progress_bar', False),  
-            # batch_size=kwargs.get('batch_size', 32),  
+            
             encode_kwargs = {'batch_size': kwargs.get('batch_size', batch_size)},
             normalize_embeddings=False  # Do not normalize before quantization  
         )  
         embeddings = torch.tensor(embeddings)  
         embeddings = embeddings.to(device)
-        # print few embeddings to check if they are in the correct range
-        # print(embeddings[:5])
-        # Apply quantization  
+        
         with torch.no_grad():  
             quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy()
             
-        # assert quantized_embeddings only contains 0, 1
-        assert np.all(np.isin(quantized_embeddings, [0, 1]))
-        # print(quantized_embeddings[:5])
-        # Optionally normalize embeddings  
-        # if kwargs.get('normalize_embeddings', True):  
-        #     quantized_embeddings = quantized_embeddings / np.linalg.norm(quantized_embeddings, axis=1, keepdims=True)  
-        return quantized_embeddings  
-  
-class QuantizedEmbeddingModelStage2(Wrapper, Encoder):  
-    """  
-    Embedding model with QuantizationModuleStage2 applied.  
-  
-    This model applies Stage 2 quantization to the embeddings.  
-    """  
-    def __init__(self, embedding_model: SentenceTransformer, quantization_module: QuantizationModuleStage2):  
-        self.embedding_model = embedding_model  
-        self.model = embedding_model
-        self.model.to(device)  # Move embedding model to GPU
-        self.quantization_module = quantization_module
-        self.quantization_module.to(device)  # Move quantization module to GPU
         
-        
-        self.model_card_data = {
-            "model_name": "QuantizedEmbeddingModelStage2",
-            "base_model": "QuantizedEmbeddingModelStage2",
-            "model_name": "QuantizedEmbeddingModelStage2",
-            "base_model_revision": None,
-            "language": ["en"],
-            "similarity_fn_name": "cos_sim",
-            "license": "apache-2.0",
-            "pipeline_tag": "sentence-similarity"
-        }
-
-  
-    def encode(self, sentences: List[str], **kwargs) -> np.ndarray:  
-        """  
-        Encode sentences into quantized embeddings.  
-  
-        Args:  
-            sentences (List[str]): List of sentences to encode.  
-  
-        Returns:  
-            np.ndarray: Array of quantized embeddings.  
-        """  
-        # Get embeddings from the base model  
-        embeddings = self.embedding_model.encode(  
-            sentences,  
-            show_progress_bar=kwargs.get('show_progress_bar', False),  
-            # batch_size=kwargs.get('batch_size', 32),  
-            encode_kwargs = {'batch_size': kwargs.get('batch_size', batch_size)},
-            normalize_embeddings=False  # Do not normalize before quantization  
-        )  
-        embeddings = torch.tensor(embeddings).to(device) 
-        # print few embeddings to check if they are in the correct range
-        # print(embeddings[:5])
-        # Apply quantization  
-        with torch.no_grad():  
-            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy()
-        # assert quantized_embeddings only contains 0, 1
-        assert np.all(np.isin(quantized_embeddings, [0, 1]))
-        # print(quantized_embeddings[:5])
-        # Optionally normalize embeddings  
-        # if kwargs.get('normalize_embeddings', True):  
-        #     quantized_embeddings = quantized_embeddings / np.linalg.norm(quantized_embeddings, axis=1, keepdims=True)  
         return quantized_embeddings  
     
     
-class QuantizedEmbeddingModelStage3(Wrapper, Encoder):  
-    """  
-    Embedding model with ImprovedQuantizationModule applied.  
-  
-    This model applies Stage 3 quantization to the embeddings.  
-    """
-    
-    def __init__(self, embedding_model: SentenceTransformer, quantization_module: QuantizationModuleStage2):  
-        self.embedding_model = embedding_model  
-        self.model = embedding_model
-        self.model.to(device)  # Move embedding model to GPU
-        self.quantization_module = quantization_module
-        self.quantization_module.to(device)  # Move quantization module to GPU
-        
-        
-        self.model_card_data = {
-            "model_name": "QuantizedEmbeddingModelStage3",
-            "base_model": "QuantizedEmbeddingModelStage3",
-            "model_name": "QuantizedEmbeddingModelStage3",
-            "base_model_revision": None,
-            "language": ["en"],
-            "similarity_fn_name": "cos_sim",
-            "license": "apache-2.0",
-            "pipeline_tag": "sentence-similarity"
-        }
-
-  
-    def encode(self, sentences: List[str], **kwargs) -> np.ndarray:  
-        """  
-        Encode sentences into quantized embeddings.  
-  
-        Args:  
-            sentences (List[str]): List of sentences to encode.  
-  
-        Returns:  
-            np.ndarray: Array of quantized embeddings.  
-        """  
-        # Get embeddings from the base model  
-        embeddings = self.embedding_model.encode(  
-            sentences,  
-            show_progress_bar=kwargs.get('show_progress_bar', False),  
-            # batch_size=kwargs.get('batch_size', 32),  
-            encode_kwargs = {'batch_size': kwargs.get('batch_size', batch_size)},
-            normalize_embeddings=False  # Do not normalize before quantization  
-        )  
-        embeddings = torch.tensor(embeddings).to(device) 
-        # print few embeddings to check if they are in the correct range
-        # print(embeddings[:5])
-        # Apply quantization  
-        with torch.no_grad():  
-            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy()
-        # assert quantized_embeddings only contains 0, 1
-        assert np.all(np.isin(quantized_embeddings, [0, 1]))
-        # print(quantized_embeddings[:5])
-        # Optionally normalize embeddings  
-        # if kwargs.get('normalize_embeddings', True):  
-        #     quantized_embeddings = quantized_embeddings / np.linalg.norm(quantized_embeddings, axis=1, keepdims=True)  
-        return quantized_embeddings 
-      
   
 def evaluate_model_on_tasks(model, tasks: List[str], model_name: str, results_dir: str) -> Dict:  
     """  
@@ -419,7 +298,7 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
     print("  Evaluating Stage1 Untrained...")
     quantization_module_stage1_zero = QuantizationModuleStage1(embedding_dim)
     quantization_module_stage1_zero.thresholds.data.fill_(0.0)
-    quantized_model_stage1_zero = QuantizedEmbeddingModelStage1(
+    quantized_model_stage1_zero = QuantizedEmbeddingModel(
         embedding_model=embedding_model,
         quantization_module=quantization_module_stage1_zero
     )
@@ -435,12 +314,12 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
     print("  Evaluating Stage1 Trained...")
     quantization_module_stage1_trained = QuantizationModuleStage1(embedding_dim)
     quantization_module_stage1_trained.load_state_dict(
-        torch.load(f'saved_models/{save_dir}/quantization_stage1.pth', map_location=device)
+        torch.load(f'saved_models/{save_dirs[0]}/quantization_stage1.pth', map_location=device, weights_only=False)
     )
     # print(quantization_module_stage1_trained.thresholds)
     quantization_module_stage1_trained.to(device)
     quantization_module_stage1_trained.eval()
-    quantized_model_stage1_trained = QuantizedEmbeddingModelStage1(
+    quantized_model_stage1_trained = QuantizedEmbeddingModel(
         embedding_model=embedding_model,
         quantization_module=quantization_module_stage1_trained
     )
@@ -452,6 +331,26 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
     )
     task_results['QuantStage1_Trained'] = results_stage1_trained
     
+    # 3.5 Stage1.1 Trained
+    print("  Evaluating Stage1.1 Trained...")
+    quantization_module_stage1_1_trained = QuantizationModuleStage1WithScales(embedding_dim)
+    quantization_module_stage1_1_trained.load_state_dict(
+        torch.load(f'saved_models/{save_dirs[1]}/quantization_stage1_with_scales.pth', map_location=device, weights_only=False)
+    )
+    quantization_module_stage1_1_trained.to(device)
+    quantization_module_stage1_1_trained.eval()
+    quantized_model_stage1_1_trained = QuantizedEmbeddingModel(
+        embedding_model=embedding_model,
+        quantization_module=quantization_module_stage1_1_trained
+    )
+    results_stage1_1_trained = evaluate_model_on_tasks(
+        model=quantized_model_stage1_1_trained,
+        tasks=[task],
+        model_name='QuantStage1.1_Trained',
+        results_dir=results_dir
+    )
+    task_results['QuantStage1.1_Trained'] = results_stage1_1_trained
+    
     # 3.5 Stage2 Untrained
     print("  Evaluating Stage2 Untrained...")
     quantization_module_stage2_untrained = QuantizationModuleStage2(embedding_dim)
@@ -459,7 +358,7 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
     quantization_module_stage2_untrained.thresholds_second_half.data.fill_(0.0)
     quantization_module_stage2_untrained.to(device)
     quantization_module_stage2_untrained.eval()
-    quantized_model_stage2_untrained = QuantizedEmbeddingModelStage2(
+    quantized_model_stage2_untrained = QuantizedEmbeddingModel(
         embedding_model=embedding_model,
         quantization_module=quantization_module_stage2_untrained
     )
@@ -475,12 +374,12 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
     print("  Evaluating Stage2 Trained...")
     quantization_module_stage2_trained = QuantizationModuleStage2(embedding_dim)
     quantization_module_stage2_trained.load_state_dict(
-        torch.load(f'saved_models/{save_dir}/quantization_stage2.pth', map_location=device)
+        torch.load(f'saved_models/{save_dirs[2]}/quantization_stage2.pth', map_location=device, weights_only=False)
     )
     
     quantization_module_stage2_trained.to(device)
     quantization_module_stage2_trained.eval()
-    quantized_model_stage2_trained = QuantizedEmbeddingModelStage2(
+    quantized_model_stage2_trained = QuantizedEmbeddingModel(
         embedding_model=embedding_model,
         quantization_module=quantization_module_stage2_trained
     )
@@ -496,12 +395,12 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
     print("  Evaluating Stage3 Trained...")
     quantization_module_stage3_trained = ImprovedQuantizationModule(embedding_dim)
     quantization_module_stage3_trained.load_state_dict(
-        torch.load(f'saved_models/{save_dir}/improved_quantization.pth', map_location=device)
+        torch.load(f'saved_models/{save_dirs[3]}/improved_quantization.pth', map_location=device, weights_only=False)
     )
     
     quantization_module_stage3_trained.to(device)
     quantization_module_stage3_trained.eval()
-    quantized_model_stage3_trained = QuantizedEmbeddingModelStage3(
+    quantized_model_stage3_trained = QuantizedEmbeddingModel(
         embedding_model=embedding_model,
         quantization_module=quantization_module_stage3_trained
     )
@@ -580,6 +479,7 @@ def main():
         'Original': [],
         'QuantStage1_Untrained': [],
         'QuantStage1_Trained': [],
+        'QuantStage1.1_Trained': [],
         'QuantStage2_Untrained': [],
         'QuantStage2_Trained': [],
         'QuantStage3_Trained': []
