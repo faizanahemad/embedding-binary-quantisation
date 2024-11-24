@@ -22,6 +22,7 @@ class CombinedSimilarityDataset(Dataset):
         self.samples = []  
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.max_samples_per_dataset = max_samples_per_dataset
   
         # List of datasets to load along with their specific configurations  
         dataset_configs = [  
@@ -192,7 +193,7 @@ class CombinedSimilarityDataset(Dataset):
         ]  
   
         for config in dataset_configs:  
-            dataset = load_dataset(config['name'], config['config'], split=config['split'])  
+            dataset = load_dataset(config['name'], config['config'], split=config['split'], trust_remote_code=True)  
             if max_samples_per_dataset:  
                 dataset = dataset.shuffle(seed=42).select(range(min(len(dataset), max_samples_per_dataset)))  
             samples = config['loader_function'](dataset)  
@@ -223,6 +224,8 @@ class CombinedSimilarityDataset(Dataset):
                 # print(f"No positive passage found for query: {query}")
             
             samples.append((query, positive_passage))  
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples  
   
     def load_quora(self, dataset):  
@@ -241,6 +244,8 @@ class CombinedSimilarityDataset(Dataset):
                 question1 = example['questions']['text'][0]  
                 question2 = example['questions']['text'][1]  
                 samples.append((question1, question2))  
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples  
   
     def load_stsb(self, dataset):  
@@ -261,6 +266,8 @@ class CombinedSimilarityDataset(Dataset):
                 sentence1 = example['sentence1']  
                 sentence2 = example['sentence2']  
                 samples.append((sentence1, sentence2))  
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples  
   
     def load_snli(self, dataset):  
@@ -279,6 +286,8 @@ class CombinedSimilarityDataset(Dataset):
                 premise = example['premise']  
                 hypothesis = example['hypothesis']  
                 samples.append((premise, hypothesis))  
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples  
     
     def load_trivia_qa(self, dataset):
@@ -298,6 +307,8 @@ class CombinedSimilarityDataset(Dataset):
                     # If evidence is directly a string
                     elif isinstance(evidence, str) and evidence.strip():
                         samples.append((question, evidence))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_hotpot_qa(self, dataset):
@@ -310,6 +321,8 @@ class CombinedSimilarityDataset(Dataset):
             context = ' '.join([p[0] for p in example['context'] if p[0].strip()])
             if context:
                 samples.append((question, context))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_xnli(self, dataset):
@@ -320,6 +333,8 @@ class CombinedSimilarityDataset(Dataset):
         for example in dataset:
             if example['label'] == 0:  # entailment
                 samples.append((example['premise'], example['hypothesis']))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_code_search_net(self, dataset):
@@ -330,6 +345,8 @@ class CombinedSimilarityDataset(Dataset):
         for example in dataset:
             if example['docstring'] and example['code']:
                 samples.append((example['docstring'], example['code']))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_s2orc(self, dataset):
@@ -345,6 +362,8 @@ class CombinedSimilarityDataset(Dataset):
                 for section in sections:
                     if len(section) > 100:  # Filter short sections
                         samples.append((abstract, section))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_cnn_dailymail(self, dataset):
@@ -357,6 +376,8 @@ class CombinedSimilarityDataset(Dataset):
             for i in range(len(article_parts)-1):
                 if len(article_parts[i]) > 50 and len(article_parts[i+1]) > 50:
                     samples.append((article_parts[i], article_parts[i+1]))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_twitter_pairs(self, dataset):
@@ -367,6 +388,8 @@ class CombinedSimilarityDataset(Dataset):
         for example in dataset:
             if example['is_paraphrase']:
                 samples.append((example['tweet1'], example['tweet2']))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_amazon_reviews(self, dataset):
@@ -378,6 +401,8 @@ class CombinedSimilarityDataset(Dataset):
             if example['stars'] >= 4:  # Use highly rated products
                 # Create pairs from review title and body
                 samples.append((example['review_title'], example['review_body']))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_legal_bert(self, dataset):
@@ -388,6 +413,8 @@ class CombinedSimilarityDataset(Dataset):
         for example in dataset:
             if example['similarity_score'] > 0.7:
                 samples.append((example['document1'], example['document2']))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_wikihow(self, dataset):
@@ -400,6 +427,8 @@ class CombinedSimilarityDataset(Dataset):
             for i in range(len(steps)-1):
                 if len(steps[i]) > 30 and len(steps[i+1]) > 30:
                     samples.append((steps[i], steps[i+1]))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_stack_exchange(self, dataset):
@@ -410,6 +439,8 @@ class CombinedSimilarityDataset(Dataset):
         for example in dataset:
             if example['score'] > 0:  # Use positively scored pairs
                 samples.append((example['question1'], example['question2']))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_cc_news(self, dataset):
@@ -423,6 +454,8 @@ class CombinedSimilarityDataset(Dataset):
                 paragraphs = example['text'].split('\n\n')
                 if paragraphs:
                     samples.append((example['title'], paragraphs[0]))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_arxiv(self, dataset):
@@ -433,6 +466,8 @@ class CombinedSimilarityDataset(Dataset):
         for example in dataset:
             if example['abstract'] and example['title']:
                 samples.append((example['title'], example['abstract']))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_reddit_tifu(self, dataset):
@@ -444,6 +479,8 @@ class CombinedSimilarityDataset(Dataset):
             if example['title'] and example['post']:
                 # Create pairs from title and post body
                 samples.append((example['title'], example['post']))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
     
     def load_natural_questions(self, dataset):
@@ -465,6 +502,8 @@ class CombinedSimilarityDataset(Dataset):
             except KeyError:
                 # Skip examples with missing fields
                 continue
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_mrpc(self, dataset):
@@ -475,6 +514,8 @@ class CombinedSimilarityDataset(Dataset):
         for example in dataset:
             if example['label'] == 1:  # Paraphrase pairs
                 samples.append((example['sentence1'], example['sentence2']))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_paws(self, dataset):
@@ -485,6 +526,8 @@ class CombinedSimilarityDataset(Dataset):
         for example in dataset:
             if example['label'] == 1:  # Paraphrase pairs
                 samples.append((example['sentence1'], example['sentence2']))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_multi_news(self, dataset):
@@ -498,6 +541,8 @@ class CombinedSimilarityDataset(Dataset):
             for i in range(len(documents)-1):
                 if len(documents[i]) > 50 and len(documents[i+1]) > 50:  # Filter short paragraphs
                     samples.append((documents[i], documents[i+1]))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
 
     def load_wiki_snippets(self, dataset):
@@ -509,6 +554,8 @@ class CombinedSimilarityDataset(Dataset):
             if 'section_text' in example and 'context' in example:
                 # Section text and its context are semantically related
                 samples.append((example['section_text'], example['context']))
+            if len(samples) > self.max_samples_per_dataset:
+                break
         return samples
   
     def __len__(self):  
