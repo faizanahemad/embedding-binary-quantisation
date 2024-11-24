@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, train_modules, save_dirs
+from config import base_model_name, reg_strength, num_epochs, batch_size, lr
 
 from dataset import CombinedSimilarityDataset
 
@@ -69,7 +69,7 @@ def train_quantization_stage1_with_scales(embedding_model, quantization_module, 
         dataloader (DataLoader): DataLoader for the dataset  
         num_epochs (int): Number of training epochs  
     """  
-    optimizer = optim.Adam(quantization_module.parameters(), lr=0.001)  
+    optimizer = optim.Adam(quantization_module.parameters(), lr=lr)  
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   
     embedding_model.eval()  

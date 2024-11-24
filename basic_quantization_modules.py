@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, train_modules, save_dirs
+from config import base_model_name, reg_strength, num_epochs, batch_size, lr
 
 from dataset import CombinedSimilarityDataset
 
@@ -31,7 +31,7 @@ class QuantizationModuleStage1(nn.Module):
             self.thresholds = nn.Parameter(initial_thresholds)  
         else:  
             # Initialize thresholds to zero  
-            self.thresholds = nn.Parameter(torch.zeros(embedding_dim) + torch.randn(embedding_dim) * 0.01)  
+            self.thresholds = nn.Parameter(torch.zeros(embedding_dim) + torch.randn(embedding_dim) * 0.1)  
   
     def forward(self, embeddings, binary=False):  
         """  
@@ -70,10 +70,10 @@ class QuantizationModuleStage2(nn.Module):
         self.half_dim = embedding_dim // 2
 
         # Thresholds for first half
-        self.thresholds_first_half = nn.Parameter(torch.zeros(self.half_dim) + torch.randn(self.half_dim) * 0.01)
+        self.thresholds_first_half = nn.Parameter(torch.zeros(self.half_dim) + torch.randn(self.half_dim) * 0.1)
 
         # Thresholds for second half (pairs of thresholds)
-        self.thresholds_second_half = nn.Parameter(torch.zeros(self.half_dim // 2, 2) + torch.randn(self.half_dim // 2, 2) * 0.01)
+        self.thresholds_second_half = nn.Parameter(torch.zeros(self.half_dim // 2, 2) + torch.randn(self.half_dim // 2, 2) * 0.1)
 
     def forward(self, embeddings, binary=False):
         """  
@@ -124,7 +124,7 @@ def train_quantization_stage1(embedding_model, quantization_module, dataloader, 
         dataloader (DataLoader): DataLoader for the dataset  
         num_epochs (int): Number of training epochs  
     """  
-    optimizer = optim.Adam(quantization_module.parameters(), lr=0.001)  
+    optimizer = optim.Adam(quantization_module.parameters(), lr=lr)  
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   
     embedding_model.eval()  
@@ -167,7 +167,7 @@ def train_quantization_stage2(embedding_model, quantization_module, dataloader, 
         dataloader (DataLoader): DataLoader for the dataset  
         num_epochs (int): Number of training epochs  
     """  
-    optimizer = optim.Adam(quantization_module.parameters(), lr=0.001)  
+    optimizer = optim.Adam(quantization_module.parameters(), lr=lr)  
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     embedding_model.eval()  
     quantization_module.train()  

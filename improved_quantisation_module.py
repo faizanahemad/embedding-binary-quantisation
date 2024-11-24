@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size
+from config import base_model_name, reg_strength, num_epochs, batch_size, lr
 
 from dataset import CombinedSimilarityDataset
 
@@ -93,13 +93,13 @@ class ImprovedQuantizationModule(nn.Module):
         self.embedding_dim = embedding_dim
         
         # Learnable parameters for sophisticated quantization
-        self.thresholds = nn.Parameter(torch.zeros(embedding_dim))
-        self.scales = nn.Parameter(torch.ones(embedding_dim))
+        self.thresholds = nn.Parameter(torch.zeros(embedding_dim) + torch.randn(embedding_dim) * 0.1)
+        self.scales = nn.Parameter(torch.ones(embedding_dim) + torch.randn(embedding_dim) * 0.01)
         self.register_buffer('pruning_mask', torch.ones(embedding_dim, dtype=torch.bool))  # False for pruned dims
         
         
         # Importance scores for dimension pruning
-        self.importance_scores = nn.Parameter(torch.ones(embedding_dim))
+        self.importance_scores = nn.Parameter(torch.ones(embedding_dim) + torch.randn(embedding_dim) * 0.01)
         
         # Create dimension-based importance bias
         # Earlier dimensions get lower thresholds (easier to keep)
@@ -222,7 +222,7 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
         quantization_module (ImprovedQuantizationModule): Trained quantization module
         training_stats (dict): Dictionary containing training statistics
     """
-    optimizer = optim.Adam(quantization_module.parameters(), lr=0.001)
+    optimizer = optim.Adam(quantization_module.parameters(), lr=lr)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     # Initialize training statistics
