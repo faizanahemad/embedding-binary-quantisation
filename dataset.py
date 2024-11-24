@@ -288,9 +288,16 @@ class CombinedSimilarityDataset(Dataset):
         samples = []
         for example in dataset:
             question = example['question']
-            for evidence in example['evidence']:
-                if evidence['text'].strip():
-                    samples.append((question, evidence['text']))
+            # Handle case where evidence field may have different structure
+            if 'evidence' in example:
+                for evidence in example['evidence']:
+                    # Check if evidence is a dict with 'text' field
+                    if isinstance(evidence, dict) and 'text' in evidence:
+                        if evidence['text'].strip():
+                            samples.append((question, evidence['text']))
+                    # If evidence is directly a string
+                    elif isinstance(evidence, str) and evidence.strip():
+                        samples.append((question, evidence))
         return samples
 
     def load_hotpot_qa(self, dataset):
@@ -445,13 +452,19 @@ class CombinedSimilarityDataset(Dataset):
         """
         samples = []
         for example in dataset:
-            if example['annotations']['yes_no_answer'][0] != 'NONE':
-                question = example['question']['text']
-                # Use the long answer as the positive passage
-                if example['annotations']['long_answer'][0]:
-                    answer = example['document']['text'][example['annotations']['long_answer'][0]['start_token']:
-                                                    example['annotations']['long_answer'][0]['end_token']]
-                    samples.append((question, answer))
+            try:
+                if example['annotations']['yes_no_answer'][0] != 'NONE':
+                    question = example['question']['text']
+                    # Use the long answer as the positive passage
+                    if example['annotations']['long_answer'][0]:
+                        long_answer_loc = example['annotations']['long_answer'][0]
+                        answer = example['document']['tokens']['token'][long_answer_loc['start_token']:
+                                                long_answer_loc['end_token']]
+                        answer = " ".join(answer)
+                        samples.append((question, answer))
+            except KeyError:
+                # Skip examples with missing fields
+                continue
         return samples
 
     def load_mrpc(self, dataset):
