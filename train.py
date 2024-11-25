@@ -44,7 +44,7 @@ def main():
         final_indices.extend([pair_start, pair_start + 1])  # Keep pairs together
         
     sampler = torch.utils.data.sampler.SequentialSampler(final_indices)
-    dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
+    dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler, num_workers=4, persistent_workers=True, prefetch_factor=2)
     print(f"Train Dataloader size: {len(dataloader)}")
   
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

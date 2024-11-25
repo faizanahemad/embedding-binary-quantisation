@@ -4,6 +4,9 @@
 - Initialisation of thresholds plays an important role and hence multiple random initialisations are tried and the best one is chosen, Use a different test set for final reporting, while for choosing the right initialisation we use the validation set
 - Multi-Resolution Quantization : Quantization to int8 and then to int4 and then to binary.
 - Dimension Pruning by importance sampling can work only for a certain domain not for all domains, since embeddings are not sparse and are dense and all dims have some importance.
+- Replace zeros by 1e-8 to avoid division by zero in cosine similarity.
+- Matryoska embeddings, expand the initial few to 2-bits and last ones to one bit for a hybrid. For the initial few dims we would need to find thresholds.
+- Per dataset thresholds for better accuracy.
 
 -----------
 # embedding-binary-quantisation

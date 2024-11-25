@@ -34,7 +34,7 @@ class QuantizationModuleStage1WithScales(nn.Module):
             # Initialize thresholds to zero  
             self.thresholds = nn.Parameter(torch.zeros(embedding_dim) + torch.randn(embedding_dim) * init_std)  
             
-        self.scales = nn.Parameter(torch.ones(embedding_dim))
+        self.scales = nn.Parameter(torch.ones(embedding_dim) + torch.randn(embedding_dim) * init_std)
         self.temperature = 10
         
   
