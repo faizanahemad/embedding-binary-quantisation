@@ -1,10 +1,13 @@
 import os
 from pathlib import Path
+from tkinter import ttk
 import traceback
 import torch  
 from torch.utils.data import Dataset  
+from datasets import load_from_disk
 from datasets import load_dataset, DatasetDict, concatenate_datasets  
 import random  
+import datasets
   
 class CombinedSimilarityDataset(Dataset):  
     """  
@@ -112,7 +115,7 @@ class CombinedSimilarityDataset(Dataset):
             },
             # XNLI (Cross-lingual Natural Language Inference)
             {
-                'name': 'xnli',
+                'name': 'facebook/xnli',
                 'config': 'all_languages',
                 'split': 'train',
                 'loader_function': self.load_xnli
@@ -161,18 +164,18 @@ class CombinedSimilarityDataset(Dataset):
             # },
             # WikiHow (Step Similarity)
             {
-                'name': 'wikihow',
-                'config': 'all',
+                'name': 'gursi26/wikihow-cleaned',
+                'config': 'default',
                 'split': 'train',
                 'loader_function': self.load_wikihow
             },
             # Stack Exchange (Question Similarity)
-            {
-                'name': 'stack_exchange',
-                'config': 'paired',
-                'split': 'train',
-                'loader_function': self.load_stack_exchange
-            },
+            # {
+            #     'name': 'stack_exchange',
+            #     'config': 'paired',
+            #     'split': 'train',
+            #     'loader_function': self.load_stack_exchange
+            # },
             # Common Crawl News (Article Similarity)
             {
                 'name': 'cc_news',
@@ -225,18 +228,18 @@ class CombinedSimilarityDataset(Dataset):
             },
             # BillSum Dataset
             {
-                'name': 'billsum',
-                'config': 'us',
+                'name': 'FiscalNote/billsum',
+                'config': 'default',
                 'split': 'train',
                 'loader_function': self.load_billsum
             },
             # Newsroom Dataset
-            {
-                'name': 'newsroom',
-                'config': None,
-                'split': 'train',
-                'loader_function': self.load_newsroom
-            },
+            # {
+            #     'name': 'newsroom',
+            #     'config': None,
+            #     'split': 'train',
+            #     'loader_function': self.load_newsroom
+            # },
             # Reddit TIFU (Short version)
             {
                 'name': 'reddit_tifu',
@@ -267,35 +270,48 @@ class CombinedSimilarityDataset(Dataset):
             },
             # WikiSum Dataset
             {
-                'name': 'wikimedia/wikisum',
+                'name': 'd0rj/wikisum',
                 'config': None,
                 'split': 'train',
                 'loader_function': self.load_wikisum
             }
         ]  
-  
-        for config in dataset_configs:  
-            dataset_key = f"{config['name']}_{config['config']}_{self.max_samples_per_dataset}"
-            dataset_cache_path = self.cache_dir / dataset_key
-            try:
-                if os.path.exists(dataset_cache_path):
-                    dataset = Dataset.load_from_disk(dataset_cache_path)
-                    print(f"Loaded {config['name']} from cache")
-                else:
-                    dataset = load_dataset(config['name'], config['config'], split=config['split'], trust_remote_code=True) 
-                    if max_samples_per_dataset:  
-                        dataset = dataset.shuffle(seed=42).select(range(min(len(dataset), max_samples_per_dataset)))  
-                        dataset.save_to_disk(dataset_cache_path)
-                        print(f"Saved {config['name']} to cache")
+        overall_dataset_path = self.cache_dir / "overall_dataset_for_quantization"
+        if os.path.exists(overall_dataset_path):
+            dataset = load_dataset(overall_dataset_path)
+            self.samples = [tuple(example.values()) for example in dataset]
+            print(f"Loaded {overall_dataset_path} from cache")
+        else:
+            for config in dataset_configs:  
+                dataset_key = f"{config['name']}_{config['config']}_{self.max_samples_per_dataset}"
+                dataset_cache_path = self.cache_dir / dataset_key
+                try:
+                    if os.path.exists(dataset_cache_path):
+                        dataset = load_from_disk(dataset_cache_path)
+                        print(f"Loaded {config['name']} from cache")
+                    else:
+                        dataset = load_dataset(config['name'], config['config'], split=config['split'], trust_remote_code=True) 
+                        if max_samples_per_dataset:  
+                            dataset = dataset.shuffle(seed=42).select(range(min(len(dataset), max_samples_per_dataset)))  
+                            dataset.save_to_disk(dataset_cache_path)
+                            print(f"Saved {config['name']} to cache")
+                            
                         
-                        
-
-                    
                     samples = config['loader_function'](dataset)  
                     self.samples.extend(samples) 
-            except Exception as e:
-                print(f"Error loading dataset {config['name']}: {e}")
-                traceback.print_exc()
+                    
+                except Exception as e:
+                    print(f"Error loading dataset {config['name']}: {e}")
+                    traceback.print_exc()
+            # samples is a list of tuples (source, target) strings
+            # Lets make a huggingface dataset from it
+            dataset = datasets.Dataset.from_list([{'source': s[0], 'target': s[1]} for s in self.samples])
+            dataset.save_to_disk(overall_dataset_path)
+            print(f"Saved {overall_dataset_path} to cache")
+            # # get samples from the overall dataset
+            # dataset = load_dataset(overall_dataset_path)
+            # samples = [tuple(example.values()) for example in dataset]
+            
   
         # Shuffle the combined samples  
         random.shuffle(self.samples)  
@@ -374,8 +390,10 @@ class CombinedSimilarityDataset(Dataset):
         for example in dataset:
             text = example.get('text')
             summary = example.get('summary')
+            title = example.get('title')
             if text and summary:
                 samples.append((text, summary))
+                samples.append((title, summary))
                 assert isinstance(samples[-1][0], str)
                 assert isinstance(samples[-1][1], str)
             if self.max_samples_per_dataset and len(samples) >= self.max_samples_per_dataset:
@@ -468,10 +486,12 @@ class CombinedSimilarityDataset(Dataset):
         """
         samples = []
         for example in dataset:
-            source_text = example.get('source_text')
-            target_text = example.get('target_text')
+            source_text = example.get('title')
+            target_text = example.get('summary')
+            article = example.get('article')
             if source_text and target_text:
                 samples.append((source_text, target_text))
+                samples.append((article, target_text))
                 assert isinstance(samples[-1][0], str)
                 assert isinstance(samples[-1][1], str)
             if self.max_samples_per_dataset and len(samples) >= self.max_samples_per_dataset:
@@ -634,13 +654,27 @@ class CombinedSimilarityDataset(Dataset):
     def load_xnli(self, dataset):
         """
         Loads XNLI dataset for cross-lingual similarity.
+        Randomly selects one language from premise and one from hypothesis translations.
         """
         samples = []
         for example in dataset:
             if example['label'] == 0:  # entailment
-                samples.append((example['premise'], example['hypothesis']))
+                # Get available languages
+                premise_langs = list(example['premise'].keys())
+                hyp_langs = example['hypothesis']['language']
+                
+                # Randomly select languages
+                premise_lang = random.choice(premise_langs)
+                hyp_lang_idx = random.randrange(len(hyp_langs))
+                
+                # Get text in selected languages
+                premise_text = example['premise'][premise_lang]
+                hypothesis_text = example['hypothesis']['translation'][hyp_lang_idx]
+                
+                samples.append((premise_text, hypothesis_text))
                 assert isinstance(samples[-1][0], str)
                 assert isinstance(samples[-1][1], str)
+                
             if len(samples) > self.max_samples_per_dataset:
                 break
         return samples
@@ -743,12 +777,13 @@ class CombinedSimilarityDataset(Dataset):
         """
         samples = []
         for example in dataset:
-            steps = example['text'].split('\n')
-            for i in range(len(steps)-1):
-                if len(steps[i]) > 30 and len(steps[i+1]) > 30:
-                    samples.append((steps[i], steps[i+1]))
-                    assert isinstance(samples[-1][0], str)
-                    assert isinstance(samples[-1][1], str)
+            steps = example.get("summary")
+            title = example.get("title")
+            
+            if len(steps) > 30 and len(title) > 10:
+                samples.append((steps, title))
+                assert isinstance(samples[-1][0], str)
+                assert isinstance(samples[-1][1], str)
             if len(samples) > self.max_samples_per_dataset:
                 break
         return samples
