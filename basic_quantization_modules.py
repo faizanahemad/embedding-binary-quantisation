@@ -7,6 +7,7 @@ from transformers import AutoTokenizer, AutoModel
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
 from config import base_model_name, reg_strength, num_epochs, batch_size, lr
+from tqdm import tqdm
 
 from dataset import CombinedSimilarityDataset
 
@@ -126,13 +127,14 @@ def train_quantization_stage1(embedding_model, quantization_module, dataloader, 
     """  
     optimizer = optim.Adam(quantization_module.parameters(), lr=lr)  
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=lr, epochs=num_epochs, steps_per_epoch=len(dataloader))
   
     embedding_model.eval()  
     quantization_module.train()  
   
     for epoch in range(num_epochs):  
         total_loss = 0.0  
-        for batch in dataloader:  
+        for batch in tqdm(dataloader, desc=f'Epoch {epoch+1}/{num_epochs}'):  
             input_ids = batch['input_ids'].squeeze(1).to(device)  # Remove extra dimension  
             attention_mask = batch['attention_mask'].squeeze(1).to(device)  
   
@@ -147,6 +149,7 @@ def train_quantization_stage1(embedding_model, quantization_module, dataloader, 
             optimizer.zero_grad()  
             loss.backward()  
             optimizer.step()  
+            scheduler.step()
   
             total_loss += loss.item()  
   
@@ -168,13 +171,14 @@ def train_quantization_stage2(embedding_model, quantization_module, dataloader, 
         num_epochs (int): Number of training epochs  
     """  
     optimizer = optim.Adam(quantization_module.parameters(), lr=lr)  
+    scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=lr, epochs=num_epochs, steps_per_epoch=len(dataloader))
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     embedding_model.eval()  
     quantization_module.train()  
   
     for epoch in range(num_epochs):  
         total_loss = 0.0  
-        for batch in dataloader:  
+        for batch in tqdm(dataloader, desc=f'Epoch {epoch+1}/{num_epochs}'):  
             input_ids = batch['input_ids'].squeeze(1).to(device)  
             attention_mask = batch['attention_mask'].squeeze(1).to(device)  
   
@@ -189,7 +193,7 @@ def train_quantization_stage2(embedding_model, quantization_module, dataloader, 
             optimizer.zero_grad()  
             loss.backward()  
             optimizer.step()  
-  
+            scheduler.step()
             total_loss += loss.item()  
   
         avg_loss = total_loss / len(dataloader)  

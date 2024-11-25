@@ -9,6 +9,7 @@ from transformers import AutoTokenizer, AutoModel
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
 from config import base_model_name, reg_strength, num_epochs, batch_size, lr
+from tqdm import tqdm
 
 from dataset import CombinedSimilarityDataset
 
@@ -223,6 +224,7 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
         training_stats (dict): Dictionary containing training statistics
     """
     optimizer = optim.Adam(quantization_module.parameters(), lr=lr)
+    scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=lr, epochs=num_epochs, steps_per_epoch=len(dataloader))
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     # Initialize training statistics
@@ -244,7 +246,7 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
         total_reg_loss = 0.0
         total_entropy_loss = 0.0
         
-        for batch_idx, batch in enumerate(dataloader):
+        for batch_idx, batch in tqdm(enumerate(dataloader), desc=f'Epoch {epoch+1}/{num_epochs}', total=len(dataloader)):
             input_ids = batch['input_ids'].squeeze(1).to(device)
             attention_mask = batch['attention_mask'].squeeze(1).to(device)
             
@@ -294,7 +296,7 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
             torch.nn.utils.clip_grad_norm_(quantization_module.parameters(), max_norm=1.0)
             
             optimizer.step()
-            
+            scheduler.step()
             # Accumulate losses
             total_loss += loss.item()
             total_sim_loss += sim_loss.item()
@@ -380,10 +382,7 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
         k: v.tolist() if isinstance(v, np.ndarray) else v 
         for k, v in dimension_stats.items()
     }
-    print(json.dumps(json_safe_stats, indent=4))
-    # Save training statistics
-    # stats_path = os.path.join(save_dir, 'training_stats.pt')
-    # torch.save(training_stats, stats_path)
+    # print(json.dumps(json_safe_stats, indent=4))
     
     return quantization_module
   

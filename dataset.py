@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 import traceback
 import torch  
 from torch.utils.data import Dataset  
@@ -24,6 +26,7 @@ class CombinedSimilarityDataset(Dataset):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.max_samples_per_dataset = max_samples_per_dataset
+        self.cache_dir = Path.home() / ".cache/huggingface/datasets"
   
         # List of datasets to load along with their specific configurations  
         dataset_configs = [  
@@ -272,12 +275,24 @@ class CombinedSimilarityDataset(Dataset):
         ]  
   
         for config in dataset_configs:  
+            dataset_key = f"{config['name']}_{config['config']}_{self.max_samples_per_dataset}"
+            dataset_cache_path = self.cache_dir / dataset_key
             try:
-                dataset = load_dataset(config['name'], config['config'], split=config['split'], trust_remote_code=True) 
-                if max_samples_per_dataset:  
-                    dataset = dataset.shuffle(seed=42).select(range(min(len(dataset), max_samples_per_dataset)))  
-                samples = config['loader_function'](dataset)  
-                self.samples.extend(samples) 
+                if os.path.exists(dataset_cache_path):
+                    dataset = Dataset.load_from_disk(dataset_cache_path)
+                    print(f"Loaded {config['name']} from cache")
+                else:
+                    dataset = load_dataset(config['name'], config['config'], split=config['split'], trust_remote_code=True) 
+                    if max_samples_per_dataset:  
+                        dataset = dataset.shuffle(seed=42).select(range(min(len(dataset), max_samples_per_dataset)))  
+                        dataset.save_to_disk(dataset_cache_path)
+                        print(f"Saved {config['name']} to cache")
+                        
+                        
+
+                    
+                    samples = config['loader_function'](dataset)  
+                    self.samples.extend(samples) 
             except Exception as e:
                 print(f"Error loading dataset {config['name']}: {e}")
                 traceback.print_exc()

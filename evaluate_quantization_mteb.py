@@ -264,6 +264,30 @@ def print_markdown_table(df: pd.DataFrame):
     except KeyError as e:
         print(f"Error: Column not found - {e}")
         print("Available columns:", df.columns)
+        
+def print_main_score(df: pd.DataFrame):
+    """
+    Print the main score from the results DataFrame with task-wise breakdown and total average.
+    
+    Args:
+        df (pd.DataFrame): DataFrame containing the results.
+    """
+    # Filter for main_score and create pivot table
+    main_scores_df = df[df['Metric'] == 'main_score'].pivot_table(
+        values='Score',
+        index='Task',
+        columns='Model',
+        aggfunc='first'
+    ).round(4)
+    
+    # Calculate averages across tasks for each model
+    averages = main_scores_df.mean().round(4)
+    
+    # Add Total row with averages
+    main_scores_df.loc['Total'] = averages
+    
+    print("\nMain Score Results:")
+    print(main_scores_df.to_markdown())
   
 
 def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTransformer, results_dir: str) -> Dict:
@@ -505,6 +529,10 @@ def main():
     # Print final markdown table
     print("\n### Final Evaluation Results:\n")
     print_markdown_table(df_results)
+    
+    # Print main score
+    print("\n### Main Score Results:\n")
+    print_main_score(df_results)
 
 if __name__ == '__main__':  
     main()  

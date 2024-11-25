@@ -48,12 +48,23 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     embedding_model.to(device)
+    save_dir = create_save_directory()
     
     if 'stage1' in train_modules:
         # Stage 1: Train per-dimension thresholds  
         quantization_module_stage1 = QuantizationModuleStage1(embedding_dim)  
         quantization_module_stage1.to(device)
         quantization_module_stage1 = train_quantization_stage1(embedding_model, quantization_module_stage1, dataloader, num_epochs=num_epochs)  
+        
+        # Save thresholds to a JSON file
+        import json
+        thresholds_path = os.path.join(save_dir, 'stage1_thresholds.json')
+        thresholds_data = {
+            'thresholds': quantization_module_stage1.thresholds.detach().cpu().numpy().tolist()
+        }
+        with open(thresholds_path, 'w') as f:
+            json.dump(thresholds_data, f, indent=4)
+        print(f"Saved thresholds to {thresholds_path}")
     
   
     if 'stage2' in train_modules:
@@ -61,6 +72,17 @@ def main():
         quantization_module_stage2 = QuantizationModuleStage2(embedding_dim)  
         quantization_module_stage2.to(device)
         quantization_module_stage2 = train_quantization_stage2(embedding_model, quantization_module_stage2, dataloader, num_epochs=num_epochs)  
+        
+        # Save thresholds to a JSON file, self.thresholds_second_half, self.thresholds_first_half
+        import json
+        thresholds_path = os.path.join(save_dir, 'stage2_thresholds.json')
+        thresholds_data = {
+            'thresholds_second_half': quantization_module_stage2.thresholds_second_half.detach().cpu().numpy().tolist(),
+            'thresholds_first_half': quantization_module_stage2.thresholds_first_half.detach().cpu().numpy().tolist()
+        }
+        with open(thresholds_path, 'w') as f:
+            json.dump(thresholds_data, f, indent=4)
+        print(f"Saved thresholds to {thresholds_path}")
     
     if 'stage3' in train_modules:
         # Stage 3: Train with adaptive thresholds, importance scoring, and progressive dimension pruning
@@ -68,13 +90,35 @@ def main():
         quantization_module_stage3.to(device)
         quantization_module_stage3 = train_improved_quantization(embedding_model, quantization_module_stage3, dataloader, num_epochs=num_epochs)
         
+        # Save thresholds to a JSON file, self.thresholds, self.scales
+        import json
+        thresholds_path = os.path.join(save_dir, 'stage3_thresholds.json')
+        thresholds_data = {
+            'thresholds': quantization_module_stage3.thresholds.detach().cpu().numpy().tolist(),
+            'scales': quantization_module_stage3.scales.detach().cpu().numpy().tolist()
+        }
+        with open(thresholds_path, 'w') as f:
+            json.dump(thresholds_data, f, indent=4)
+        print(f"Saved thresholds to {thresholds_path}")
+        
     if 'stage1.1' in train_modules:
         # Stage 4: Train with adaptive thresholds and scaling param
         quantization_module_stage1_1 = QuantizationModuleStage1WithScales(embedding_dim)
         quantization_module_stage1_1.to(device)
         quantization_module_stage1_1 = train_quantization_stage1_with_scales(embedding_model, quantization_module_stage1_1, dataloader, num_epochs=num_epochs)
+        
+        # Save thresholds to a JSON file, self.thresholds, self.scales
+        import json
+        thresholds_path = os.path.join(save_dir, 'stage1_1_thresholds.json')
+        thresholds_data = {
+            'thresholds': quantization_module_stage1_1.thresholds.detach().cpu().numpy().tolist(),
+            'scales': quantization_module_stage1_1.scales.detach().cpu().numpy().tolist()
+        }
+        with open(thresholds_path, 'w') as f:
+            json.dump(thresholds_data, f, indent=4)
+        print(f"Saved thresholds to {thresholds_path}")
     
-    save_dir = create_save_directory()  
+      
     print(f'Saving models to {save_dir}')
     if 'stage1' in train_modules:
         save_quantization_module(quantization_module_stage1, save_dir, 'quantization_stage1')  
