@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, lr
+from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std
 from tqdm import tqdm
 
 from dataset import CombinedSimilarityDataset
@@ -32,7 +32,7 @@ class QuantizationModuleStage1(nn.Module):
             self.thresholds = nn.Parameter(initial_thresholds)  
         else:  
             # Initialize thresholds to zero  
-            self.thresholds = nn.Parameter(torch.zeros(embedding_dim) + torch.randn(embedding_dim) * 0.1)  
+            self.thresholds = nn.Parameter(torch.zeros(embedding_dim) + torch.randn(embedding_dim) * init_std)  
   
     def forward(self, embeddings, binary=False):  
         """  
@@ -71,10 +71,10 @@ class QuantizationModuleStage2(nn.Module):
         self.half_dim = embedding_dim // 2
 
         # Thresholds for first half
-        self.thresholds_first_half = nn.Parameter(torch.zeros(self.half_dim) + torch.randn(self.half_dim) * 0.1)
+        self.thresholds_first_half = nn.Parameter(torch.zeros(self.half_dim) + torch.randn(self.half_dim) * init_std)
 
         # Thresholds for second half (pairs of thresholds)
-        self.thresholds_second_half = nn.Parameter(torch.zeros(self.half_dim // 2, 2) + torch.randn(self.half_dim // 2, 2) * 0.1)
+        self.thresholds_second_half = nn.Parameter(torch.zeros(self.half_dim // 2, 2) + torch.randn(self.half_dim // 2, 2) * init_std)
 
     def forward(self, embeddings, binary=False):
         """  

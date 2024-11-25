@@ -7,7 +7,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, lr
+from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std
 
 from dataset import CombinedSimilarityDataset
 
@@ -32,7 +32,7 @@ class QuantizationModuleStage1WithScales(nn.Module):
             self.thresholds = nn.Parameter(initial_thresholds)  
         else:  
             # Initialize thresholds to zero  
-            self.thresholds = nn.Parameter(torch.zeros(embedding_dim) + torch.randn(embedding_dim) * 0.1)  
+            self.thresholds = nn.Parameter(torch.zeros(embedding_dim) + torch.randn(embedding_dim) * init_std)  
             
         self.scales = nn.Parameter(torch.ones(embedding_dim))
         self.temperature = 10

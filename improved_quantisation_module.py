@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, lr
+from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std
 from tqdm import tqdm
 
 from dataset import CombinedSimilarityDataset
@@ -94,13 +94,13 @@ class ImprovedQuantizationModule(nn.Module):
         self.embedding_dim = embedding_dim
         
         # Learnable parameters for sophisticated quantization
-        self.thresholds = nn.Parameter(torch.zeros(embedding_dim) + torch.randn(embedding_dim) * 0.1)
-        self.scales = nn.Parameter(torch.ones(embedding_dim) + torch.randn(embedding_dim) * 0.01)
+        self.thresholds = nn.Parameter(torch.zeros(embedding_dim) + torch.randn(embedding_dim) * init_std)
+        self.scales = nn.Parameter(torch.ones(embedding_dim))
         self.register_buffer('pruning_mask', torch.ones(embedding_dim, dtype=torch.bool))  # False for pruned dims
         
         
         # Importance scores for dimension pruning
-        self.importance_scores = nn.Parameter(torch.ones(embedding_dim) + torch.randn(embedding_dim) * 0.01)
+        self.importance_scores = nn.Parameter(torch.ones(embedding_dim) + torch.randn(embedding_dim) * init_std)
         
         # Create dimension-based importance bias
         # Earlier dimensions get lower thresholds (easier to keep)

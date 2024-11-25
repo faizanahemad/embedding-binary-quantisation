@@ -278,7 +278,7 @@ class CombinedSimilarityDataset(Dataset):
         ]  
         overall_dataset_path = self.cache_dir / "overall_dataset_for_quantization"
         if os.path.exists(overall_dataset_path):
-            dataset = load_dataset(overall_dataset_path)
+            dataset = load_from_disk(overall_dataset_path)
             self.samples = [tuple(example.values()) for example in dataset]
             print(f"Loaded {overall_dataset_path} from cache")
         else:
