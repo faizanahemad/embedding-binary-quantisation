@@ -22,7 +22,7 @@ from datetime import datetime
 from common import create_save_directory, save_quantization_module, similarity_preservation_loss
 
 
-class QuantizationModule(nn.Module):  
+class QuantizationModuleOneBitTwoBit(nn.Module):  
     """  
     Quantization Module for multi-threshold quantization with selective bit allocation.  
   
@@ -58,7 +58,7 @@ class QuantizationModule(nn.Module):
   
     def __init__(self, embedding_dim, sample_embeddings=None, binary_dims=0,  is_matryoshka=False,
                  use_grad_for_importance=False, momentum=0.99):  
-        super(QuantizationModule, self).__init__()  
+        super(QuantizationModuleOneBitTwoBit, self).__init__()  
         self.embedding_dim = embedding_dim  
         self.num_thresholds = 3  # For 2-bit quantization  
         self.use_grad_for_importance = use_grad_for_importance  
@@ -76,10 +76,10 @@ class QuantizationModule(nn.Module):
             thresholds = thresholds.unsqueeze(0).repeat(embedding_dim, 1)  
             self.thresholds = nn.Parameter(thresholds)  
             # Initialize importance scores to ones  
-            self.importance_scores = torch.ones(embedding_dim)  
+            self.register_buffer('importance_scores', torch.ones(embedding_dim))
   
         # Initialize Hessian diagonal approximation for gradient-based importance (if used)  
-        self.hessian_diag = torch.zeros(embedding_dim)  
+        self.register_buffer('hessian_diag', torch.zeros(embedding_dim))
   
         # Create the codebook mapping quantization levels to binary codes  
         self.codebook = {  
@@ -472,7 +472,7 @@ import torch.optim as optim
 import torch.nn.functional as F  
 from tqdm import tqdm  
   
-def train_quantization_module(embedding_model, quantization_module, dataloader, num_epochs=5, lr=1e-3, reg_strength=1e-5):  
+def train_quantization_module_one_bit_two_bit(embedding_model, quantization_module, dataloader, num_epochs=5, lr=1e-3, reg_strength=1e-5):  
     """  
     Train the QuantizationModule.  
   
@@ -596,7 +596,7 @@ if __name__ == "__main__":
     sample_embeddings = np.random.randn(num_samples, embedding_dim)  
   
     # Create the quantization module  
-    quant_module = QuantizationModule(  
+    quant_module = QuantizationModuleOneBitTwoBit(  
         embedding_dim=embedding_dim,  
         sample_embeddings=sample_embeddings,  
         binary_dims=3,  # Number of low-information dimensions to quantize using 1 bit  

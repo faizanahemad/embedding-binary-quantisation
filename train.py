@@ -18,6 +18,7 @@ from improved_quantisation_module import ImprovedQuantizationModule, train_impro
 
 from basic_quantization_modules import QuantizationModuleStage1, QuantizationModuleStage2, train_quantization_stage1, train_quantization_stage2
 from towards_better_quantisation import QuantizationModuleStage1WithScales, train_quantization_stage1_with_scales
+from two_bit_one_bit_dual_quantization_module import QuantizationModuleOneBitTwoBit, train_quantization_module_one_bit_two_bit
   
 def main():  
     # Load the frozen embedding model  
@@ -119,6 +120,21 @@ def main():
         with open(thresholds_path, 'w') as f:
             json.dump(thresholds_data, f, indent=4)
         print(f"Saved thresholds to {thresholds_path}")
+        
+    if 'OneBitTwoBit' in train_modules:
+        quantization_module_one_bit_two_bit = QuantizationModuleOneBitTwoBit(embedding_dim)
+        quantization_module_one_bit_two_bit.to(device)
+        quantization_module_one_bit_two_bit = train_quantization_module_one_bit_two_bit(embedding_model, quantization_module_one_bit_two_bit, dataloader, num_epochs=num_epochs)
+        
+        # Save thresholds to a JSON file, self.thresholds, self.scales
+        import json
+        thresholds_path = os.path.join(save_dir, 'one_bit_two_bit_thresholds.json')
+        thresholds_data = {
+            'thresholds': quantization_module_one_bit_two_bit.thresholds.detach().cpu().numpy().tolist()
+        }
+        with open(thresholds_path, 'w') as f:
+            json.dump(thresholds_data, f, indent=4)
+        print(f"Saved thresholds to {thresholds_path}")
     
       
     print(f'Saving models to {save_dir}')
@@ -130,6 +146,9 @@ def main():
         save_quantization_module(quantization_module_stage3, save_dir, 'improved_quantization')
     if 'stage1.1' in train_modules:
         save_quantization_module(quantization_module_stage1_1, save_dir, 'quantization_stage1_with_scales')
+    if 'OneBitTwoBit' in train_modules:
+        save_quantization_module(quantization_module_one_bit_two_bit, save_dir, 'one_bit_two_bit_thresholds')
+        
     # Inference example  
     return
     embedding_model.eval()  

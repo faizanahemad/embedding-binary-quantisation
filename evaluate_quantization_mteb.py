@@ -39,8 +39,8 @@ from datetime import datetime
   
 # Assuming QuantizationModuleStage1 and QuantizationModuleStage2 are defined in quantization_modules.py  
 from improved_quantisation_module import ImprovedQuantizationModule
-from train import QuantizationModuleStage1, QuantizationModuleStage2, QuantizationModuleStage1WithScales
-from config import save_dirs
+from train import QuantizationModuleStage1, QuantizationModuleStage2, QuantizationModuleStage1WithScales, QuantizationModuleOneBitTwoBit
+from config import save_dirs, test_modules
 batch_size = 512
   
   
@@ -145,9 +145,11 @@ class QuantizedEmbeddingModel(Wrapper, Encoder):
         )  
         embeddings = torch.tensor(embeddings)  
         embeddings = embeddings.to(device)
+        print(f"[DEBUG] QuantizedEmbeddingModel.encode() - embeddings shape: {embeddings.shape}")
         
         with torch.no_grad():  
-            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy()
+            quantized_embeddings = self.quantization_module(embeddings, binary=False).cpu().numpy()
+        print(f"[DEBUG] QuantizedEmbeddingModel.encode() - quantized_embeddings shape: {quantized_embeddings.shape}")
             
         
         return quantized_embeddings  
@@ -333,109 +335,134 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         results_dir=results_dir
     )
     task_results['QuantStage1_Untrained'] = results_stage1_zero
+    
+    if 'stage1' in test_modules:
+        # 3. Stage1 Trained
+        print("  Evaluating Stage1 Trained...")
+        quantization_module_stage1_trained = QuantizationModuleStage1(embedding_dim)
+        quantization_module_stage1_trained.load_state_dict(
+            torch.load(f'saved_models/{save_dirs[0]}/quantization_stage1.pth', map_location=device, weights_only=False)
+        )
+        # print(quantization_module_stage1_trained.thresholds)
+        quantization_module_stage1_trained.to(device)
+        quantization_module_stage1_trained.eval()
+        quantized_model_stage1_trained = QuantizedEmbeddingModel(
+            embedding_model=embedding_model,
+            quantization_module=quantization_module_stage1_trained
+        )
+        results_stage1_trained = evaluate_model_on_tasks(
+            model=quantized_model_stage1_trained,
+            tasks=[task],
+            model_name='QuantStage1_Trained',
+            results_dir=results_dir
+        )
+        task_results['QuantStage1_Trained'] = results_stage1_trained
+    
+    if 'stage1.1' in test_modules:
+        # 3.5 Stage1.1 Trained
+        print("  Evaluating Stage1.1 Trained...")
+        quantization_module_stage1_1_trained = QuantizationModuleStage1WithScales(embedding_dim)
+        quantization_module_stage1_1_trained.load_state_dict(
+            torch.load(f'saved_models/{save_dirs[1]}/quantization_stage1_with_scales.pth', map_location=device, weights_only=False)
+        )
+        quantization_module_stage1_1_trained.to(device)
+        quantization_module_stage1_1_trained.eval()
+        quantized_model_stage1_1_trained = QuantizedEmbeddingModel(
+            embedding_model=embedding_model,
+            quantization_module=quantization_module_stage1_1_trained
+        )
+        results_stage1_1_trained = evaluate_model_on_tasks(
+            model=quantized_model_stage1_1_trained,
+            tasks=[task],
+            model_name='QuantStage1.1_Trained',
+            results_dir=results_dir
+        )
+        task_results['QuantStage1.1_Trained'] = results_stage1_1_trained
+    
+    if 'stage2' in test_modules:
+        # 3.5 Stage2 Untrained  
+        print("  Evaluating Stage2 Untrained...")
+        quantization_module_stage2_untrained = QuantizationModuleStage2(embedding_dim)
+        quantization_module_stage2_untrained.thresholds_first_half.data.fill_(0.0)
+        quantization_module_stage2_untrained.thresholds_second_half.data.fill_(0.0)
+        quantization_module_stage2_untrained.to(device)
+        quantization_module_stage2_untrained.eval()
+        quantized_model_stage2_untrained = QuantizedEmbeddingModel(
+            embedding_model=embedding_model,
+            quantization_module=quantization_module_stage2_untrained
+        )
+        results_stage2_untrained = evaluate_model_on_tasks(
+            model=quantized_model_stage2_untrained,
+            tasks=[task],
+            model_name='QuantStage2_Untrained',
+            results_dir=results_dir
+        )
+        task_results['QuantStage2_Untrained'] = results_stage2_untrained
 
-    # 3. Stage1 Trained
-    print("  Evaluating Stage1 Trained...")
-    quantization_module_stage1_trained = QuantizationModuleStage1(embedding_dim)
-    quantization_module_stage1_trained.load_state_dict(
-        torch.load(f'saved_models/{save_dirs[0]}/quantization_stage1.pth', map_location=device, weights_only=False)
-    )
-    # print(quantization_module_stage1_trained.thresholds)
-    quantization_module_stage1_trained.to(device)
-    quantization_module_stage1_trained.eval()
-    quantized_model_stage1_trained = QuantizedEmbeddingModel(
-        embedding_model=embedding_model,
-        quantization_module=quantization_module_stage1_trained
-    )
-    results_stage1_trained = evaluate_model_on_tasks(
-        model=quantized_model_stage1_trained,
-        tasks=[task],
-        model_name='QuantStage1_Trained',
-        results_dir=results_dir
-    )
-    task_results['QuantStage1_Trained'] = results_stage1_trained
+        # 4. Stage2 Trained
+        print("  Evaluating Stage2 Trained...")
+        quantization_module_stage2_trained = QuantizationModuleStage2(embedding_dim)
+        quantization_module_stage2_trained.load_state_dict(
+            torch.load(f'saved_models/{save_dirs[2]}/quantization_stage2.pth', map_location=device, weights_only=False)
+        )
+        
+        quantization_module_stage2_trained.to(device)
+        quantization_module_stage2_trained.eval()
+        quantized_model_stage2_trained = QuantizedEmbeddingModel(
+            embedding_model=embedding_model,
+            quantization_module=quantization_module_stage2_trained
+        )
+        results_stage2_trained = evaluate_model_on_tasks(
+            model=quantized_model_stage2_trained,
+            tasks=[task],
+            model_name='QuantStage2_Trained',
+            results_dir=results_dir
+        )
+        task_results['QuantStage2_Trained'] = results_stage2_trained
     
-    # 3.5 Stage1.1 Trained
-    print("  Evaluating Stage1.1 Trained...")
-    quantization_module_stage1_1_trained = QuantizationModuleStage1WithScales(embedding_dim)
-    quantization_module_stage1_1_trained.load_state_dict(
-        torch.load(f'saved_models/{save_dirs[1]}/quantization_stage1_with_scales.pth', map_location=device, weights_only=False)
-    )
-    quantization_module_stage1_1_trained.to(device)
-    quantization_module_stage1_1_trained.eval()
-    quantized_model_stage1_1_trained = QuantizedEmbeddingModel(
-        embedding_model=embedding_model,
-        quantization_module=quantization_module_stage1_1_trained
-    )
-    results_stage1_1_trained = evaluate_model_on_tasks(
-        model=quantized_model_stage1_1_trained,
-        tasks=[task],
-        model_name='QuantStage1.1_Trained',
-        results_dir=results_dir
-    )
-    task_results['QuantStage1.1_Trained'] = results_stage1_1_trained
-    
-    # 3.5 Stage2 Untrained
-    print("  Evaluating Stage2 Untrained...")
-    quantization_module_stage2_untrained = QuantizationModuleStage2(embedding_dim)
-    quantization_module_stage2_untrained.thresholds_first_half.data.fill_(0.0)
-    quantization_module_stage2_untrained.thresholds_second_half.data.fill_(0.0)
-    quantization_module_stage2_untrained.to(device)
-    quantization_module_stage2_untrained.eval()
-    quantized_model_stage2_untrained = QuantizedEmbeddingModel(
-        embedding_model=embedding_model,
-        quantization_module=quantization_module_stage2_untrained
-    )
-    results_stage2_untrained = evaluate_model_on_tasks(
-        model=quantized_model_stage2_untrained,
-        tasks=[task],
-        model_name='QuantStage2_Untrained',
-        results_dir=results_dir
-    )
-    task_results['QuantStage2_Untrained'] = results_stage2_untrained
-
-    # 4. Stage2 Trained
-    print("  Evaluating Stage2 Trained...")
-    quantization_module_stage2_trained = QuantizationModuleStage2(embedding_dim)
-    quantization_module_stage2_trained.load_state_dict(
-        torch.load(f'saved_models/{save_dirs[2]}/quantization_stage2.pth', map_location=device, weights_only=False)
-    )
-    
-    quantization_module_stage2_trained.to(device)
-    quantization_module_stage2_trained.eval()
-    quantized_model_stage2_trained = QuantizedEmbeddingModel(
-        embedding_model=embedding_model,
-        quantization_module=quantization_module_stage2_trained
-    )
-    results_stage2_trained = evaluate_model_on_tasks(
-        model=quantized_model_stage2_trained,
-        tasks=[task],
-        model_name='QuantStage2_Trained',
-        results_dir=results_dir
-    )
-    task_results['QuantStage2_Trained'] = results_stage2_trained
-    
-    # 5. Stage3 Trained
-    print("  Evaluating Stage3 Trained...")
-    quantization_module_stage3_trained = ImprovedQuantizationModule(embedding_dim)
-    quantization_module_stage3_trained.load_state_dict(
-        torch.load(f'saved_models/{save_dirs[3]}/improved_quantization.pth', map_location=device, weights_only=False)
-    )
-    
-    quantization_module_stage3_trained.to(device)
-    quantization_module_stage3_trained.eval()
-    quantized_model_stage3_trained = QuantizedEmbeddingModel(
-        embedding_model=embedding_model,
-        quantization_module=quantization_module_stage3_trained
-    )
-    results_stage3_trained = evaluate_model_on_tasks(
-        model=quantized_model_stage3_trained,
-        tasks=[task],
-        model_name='QuantStage3_Trained',
-        results_dir=results_dir
-    )
-    task_results['QuantStage3_Trained'] = results_stage3_trained
-
+    if 'stage3' in test_modules:
+        # 5. Stage3 Trained
+        print("  Evaluating Stage3 Trained...")
+        quantization_module_stage3_trained = ImprovedQuantizationModule(embedding_dim)
+        quantization_module_stage3_trained.load_state_dict(
+            torch.load(f'saved_models/{save_dirs[3]}/improved_quantization.pth', map_location=device, weights_only=False)
+        )
+        
+        quantization_module_stage3_trained.to(device)
+        quantization_module_stage3_trained.eval()
+        quantized_model_stage3_trained = QuantizedEmbeddingModel(
+            embedding_model=embedding_model,
+            quantization_module=quantization_module_stage3_trained
+        )
+        results_stage3_trained = evaluate_model_on_tasks(
+            model=quantized_model_stage3_trained,
+            tasks=[task],
+            model_name='QuantStage3_Trained',
+            results_dir=results_dir
+        )
+        task_results['QuantStage3_Trained'] = results_stage3_trained
+        
+    if 'OneBitTwoBit' in test_modules:
+        # 6. OneBitTwoBit Trained
+        print("  Evaluating OneBitTwoBit Trained...")
+        quantization_module_one_bit_two_bit = QuantizationModuleOneBitTwoBit(embedding_dim)
+        quantization_module_one_bit_two_bit.load_state_dict(
+            torch.load(f'saved_models/{save_dirs[4]}/one_bit_two_bit_thresholds.pth', map_location=device, weights_only=False)
+        )
+        quantization_module_one_bit_two_bit.to(device)
+        quantization_module_one_bit_two_bit.eval()
+        quantized_model_one_bit_two_bit = QuantizedEmbeddingModel(
+            embedding_model=embedding_model,
+            quantization_module=quantization_module_one_bit_two_bit
+        )
+        results_one_bit_two_bit = evaluate_model_on_tasks(
+            model=quantized_model_one_bit_two_bit,
+            tasks=[task],
+            model_name='OneBitTwoBit_Trained',
+            results_dir=results_dir
+        )
+        task_results['OneBitTwoBit_Trained'] = results_one_bit_two_bit
+        
     # Print individual task results
     df_task_results = aggregate_results(task_results, [task])
     print(f"\nResults for task {task}:")
@@ -506,7 +533,8 @@ def main():
         'QuantStage1.1_Trained': [],
         'QuantStage2_Untrained': [],
         'QuantStage2_Trained': [],
-        'QuantStage3_Trained': []
+        'QuantStage3_Trained': [],
+        'OneBitTwoBit_Trained': []
     }
 
     # Evaluate each task individually
