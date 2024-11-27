@@ -13,7 +13,7 @@ from dataset import CombinedSimilarityDataset
 
 import os  
 from datetime import datetime  
-from common import create_save_directory, save_quantization_module, similarity_preservation_loss
+from common import create_save_directory, save_quantization_module, similarity_preservation_loss, get_dataloader
 from improved_quantisation_module import ImprovedQuantizationModule, train_improved_quantization
 
 from basic_quantization_modules import QuantizationModuleStage1, QuantizationModuleStage2, train_quantization_stage1, train_quantization_stage2
@@ -34,20 +34,7 @@ def main():
     # texts = ["This is a sample sentence.", "Another example text.", "More data for training."]  
     # dataset = ExampleDataset(texts)  
     
-    dataset = CombinedSimilarityDataset(tokenizer, max_length=128, max_samples_per_dataset=10000)
-    print(f"Train Dataset size: {len(dataset)}")
-    # Create a sampler that keeps pairs together while shuffling between pairs
-    indices = list(range(0, len(dataset), 2))  # Get indices of first element of each pair
-    shuffled_pair_indices = torch.randperm(len(indices)).tolist()
-    final_indices = []
-    for idx in shuffled_pair_indices:
-        pair_start = indices[idx]
-        final_indices.extend([pair_start, pair_start + 1])  # Keep pairs together
-        
-    sampler = torch.utils.data.sampler.SequentialSampler(final_indices)
-    dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler, num_workers=4, persistent_workers=True, prefetch_factor=2)
-    print(f"Train Dataloader size: {len(dataloader)}")
-  
+    dataloader = get_dataloader(base_model_name, batch_size)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     embedding_model.to(device)
