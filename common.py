@@ -66,6 +66,52 @@ def similarity_preservation_loss(original_embeddings, quantized_embeddings):
     loss = F.mse_loss(sim_quantized, sim_original)  
   
     return loss  
+
+def eye_like(tensor):
+    return torch.eye(*tensor.size(), out=torch.empty_like(tensor))
+
+def matching_preserving_loss(original_embeddings, quantized_embeddings):
+    original_embeddings_normalized = F.normalize(original_embeddings, dim=1)
+    quantized_embeddings_normalized = F.normalize(quantized_embeddings, dim=1)
+    cosine_similarities = torch.matmul(original_embeddings_normalized, quantized_embeddings_normalized.t())
+    rank_loss = F.mse_loss(cosine_similarities, eye_like(cosine_similarities))
+    return rank_loss
+
+def rank_preserving_loss(original_embeddings, quantized_embeddings):
+    original_embeddings_normalized = F.normalize(original_embeddings, dim=1)
+    quantized_embeddings_normalized = F.normalize(quantized_embeddings, dim=1)
+    sim_original = torch.matmul(original_embeddings_normalized, original_embeddings_normalized.t())
+    sim_quantized = torch.matmul(quantized_embeddings_normalized, quantized_embeddings_normalized.t())
+    
+    # Create masks for upper triangular part (excluding diagonal)
+    mask = torch.triu(torch.ones_like(sim_original), diagonal=1)
+    
+    # Get pairs of similarities
+    sim_orig_pairs1 = sim_original.unsqueeze(2)  # [batch, batch, 1]
+    sim_orig_pairs2 = sim_original.unsqueeze(1)  # [batch, 1, batch]
+    sim_quant_pairs1 = sim_quantized.unsqueeze(2)  # [batch, batch, 1]
+    sim_quant_pairs2 = sim_quantized.unsqueeze(1)  # [batch, 1, batch]
+    
+    # Compare relative ordering
+    orig_diff = sim_orig_pairs1 - sim_orig_pairs2  # [batch, batch, batch]
+    quant_diff = sim_quant_pairs1 - sim_quant_pairs2  # [batch, batch, batch]
+    
+    # Use sigmoid to get soft sign of differences
+    orig_sign = torch.sigmoid(orig_diff * 10)  # Scale factor 10 makes sigmoid sharper
+    quant_sign = torch.sigmoid(quant_diff * 10)
+    
+    # Compute loss when relative ordering is different
+    loss = F.mse_loss(quant_sign, orig_sign, reduction='none')
+    
+    # Apply mask to consider only unique pairs
+    mask = mask.unsqueeze(2) * torch.ones_like(loss)
+    loss = loss * mask
+    
+    # Average over all valid pairs
+    loss = loss.sum() / (mask.sum() + 1e-6)
+    
+    return loss
+    
   
 
 def get_dataloader(base_model_name, batch_size, num_workers=4, persistent_workers=True, prefetch_factor=2):

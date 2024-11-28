@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std
+from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std, temperature
 from tqdm import tqdm
 
 from dataset import CombinedSimilarityDataset
@@ -19,7 +19,7 @@ from dataset import CombinedSimilarityDataset
 
 import os  
 from datetime import datetime  
-from common import create_save_directory, save_quantization_module, similarity_preservation_loss
+from common import create_save_directory, matching_preserving_loss, rank_preserving_loss, save_quantization_module, similarity_preservation_loss
 
 
 class QuantizationModuleOneBitTwoBit(nn.Module):  
@@ -394,7 +394,7 @@ class QuantizationModuleOneBitTwoBit(nn.Module):
         thresholds_expanded = thresholds.unsqueeze(0)  # Shape: (1, num_dims, num_thresholds)  
   
         # Compute soft assignments  
-        k = 10.0  # Temperature parameter controlling the steepness  
+        k = temperature  # Temperature parameter controlling the steepness  
         logits = k * (embeddings_expanded - thresholds_expanded)  # Shape: (batch_size, num_dims, num_thresholds)  
         sigma = torch.sigmoid(logits)  
   
@@ -431,7 +431,7 @@ class QuantizationModuleOneBitTwoBit(nn.Module):
         thresholds = thresholds.clamp(min=embeddings.min().item(), max=embeddings.max().item())  
   
         # Compute soft assignments  
-        k = 10.0  # Temperature parameter  
+        k = temperature  # Temperature parameter  
         logits = k * (embeddings - thresholds.unsqueeze(0))  # Shape: (batch_size, num_dims)  
         quantized_embeddings = torch.sigmoid(logits)  
   
@@ -510,29 +510,6 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
     # Set the quantization module to training mode  
     quantization_module.train()  
   
-    # Define the similarity preservation loss function  
-    def similarity_preservation_loss(original_embeddings, quantized_embeddings):  
-        """  
-        Computes a loss to preserve the similarity between original and quantized embeddings.  
-  
-        Args:  
-            original_embeddings (torch.Tensor): Original embeddings, shape (batch_size, embedding_dim).  
-            quantized_embeddings (torch.Tensor): Quantized embeddings, shape (batch_size, embedding_dim).  
-  
-        Returns:  
-            torch.Tensor: The computed similarity preservation loss.  
-        """  
-        # Normalize the embeddings to unit vectors  
-        orig_norm = F.normalize(original_embeddings, p=2, dim=1)  
-        quant_norm = F.normalize(quantized_embeddings, p=2, dim=1)  
-  
-        # Compute cosine similarity matrices  
-        orig_similarity = torch.mm(orig_norm, orig_norm.t())  # Shape: (batch_size, batch_size)  
-        quant_similarity = torch.mm(quant_norm, quant_norm.t())  
-  
-        # Compute the mean squared error between the similarity matrices  
-        loss = F.mse_loss(quant_similarity, orig_similarity)  
-        return loss  
   
     # Training loop  
     for epoch in range(num_epochs):  
@@ -554,7 +531,7 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
             quantized_embeddings = quantization_module(embeddings, binary=False)  
   
             # Compute the similarity preservation loss  
-            loss_similarity = similarity_preservation_loss(embeddings, quantized_embeddings)  
+            loss_similarity = similarity_preservation_loss(embeddings, quantized_embeddings) + matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
   
             # Regularization: L2 norm of the thresholds to prevent them from growing too large  
             reg_thresholds = torch.norm(quantization_module.thresholds, p=2)  

@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std
+from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std, temperature
 from tqdm import tqdm
 
 from dataset import CombinedSimilarityDataset
@@ -16,7 +16,7 @@ from dataset import CombinedSimilarityDataset
 
 import os  
 from datetime import datetime  
-from common import create_save_directory, save_quantization_module, similarity_preservation_loss
+from common import create_save_directory, save_quantization_module, similarity_preservation_loss, matching_preserving_loss, rank_preserving_loss
 
 
 class ImprovedQuantizationModule(nn.Module):
@@ -113,7 +113,7 @@ class ImprovedQuantizationModule(nn.Module):
 
         
         # Temperature parameter for soft pruning
-        self.temperature = 0.1
+        self.temperature = 1/temperature
         self.importance_momentum = 0.99
     
     def compute_importance_scores(self, embeddings):
@@ -266,7 +266,7 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
             quantized_embeddings = quantization_module(embeddings)
             
             # Compute losses
-            sim_loss = similarity_preservation_loss(embeddings, quantized_embeddings)
+            sim_loss = similarity_preservation_loss(embeddings, quantized_embeddings) + matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
             
             # L2 regularization weighted by importance scores
             reg_loss = reg_strength * torch.sum(

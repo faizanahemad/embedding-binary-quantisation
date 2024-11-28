@@ -30,10 +30,24 @@ from common import OriginalEmbeddingModel, QuantizedEmbeddingModel, get_dataload
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 batch_size = 512 * 2
 
+# TODO: are close tuple pairs actually showing similarity?
+
 def check_loss(embedding_model, quantization_module, dataloader):
     average_loss = 0
     average_spearman_corr = 0
     average_pearson_corr = 0
+    average_spearman_corr_non_quant = 0
+    average_pearson_corr_non_quant = 0
+    paired_similarities = {
+        'original': [],
+        'quantized': [],
+        'non_quantized': []
+    }
+    random_similarities = {
+        'original': [],
+        'quantized': [],
+        'non_quantized': []
+    }
     idx = 0
     for batch in tqdm(dataloader):  
         input_ids = batch['input_ids'].squeeze(1).to(device)  # Remove extra dimension  
@@ -46,12 +60,16 @@ def check_loss(embedding_model, quantization_module, dataloader):
             embeddings = embedding_model(input_ids=input_ids, attention_mask=attention_mask)  
             embeddings = embeddings.last_hidden_state.mean(dim=1)  # Mean pooling  
             original_embeddings = embeddings
+            non_quant_embeddings_normalized = embeddings
             if quantization_module is not None:
                 embeddings = quantization_module(embeddings, binary=True)  
+                non_quant_embeddings = quantization_module(original_embeddings, binary=False)  
+            else:
+                embeddings = embeddings
+                non_quant_embeddings = embeddings
                 
         # Normalize embeddings to unit length
         embeddings_normalized = F.normalize(embeddings, p=2, dim=1)
-        
         # Calculate similarity matrix through dot product of normalized embeddings
         # Shape: (batch_size x batch_size)
         similarity_matrix = torch.matmul(embeddings_normalized, embeddings_normalized.t())
@@ -59,23 +77,72 @@ def check_loss(embedding_model, quantization_module, dataloader):
         original_embeddings_normalized = F.normalize(original_embeddings, p=2, dim=1)
         original_similarity_matrix = torch.matmul(original_embeddings_normalized, original_embeddings_normalized.t())
 
+        non_quant_embeddings_normalized = F.normalize(non_quant_embeddings, p=2, dim=1)
+        non_quant_similarity_matrix = torch.matmul(non_quant_embeddings_normalized, non_quant_embeddings_normalized.t())
+        
+        
+        for i in range(0, similarity_matrix.shape[0]-1, 2):
+            # Store similarities for paired samples
+            paired_similarities['quantized'].append(similarity_matrix[i, i+1].item())
+            paired_similarities['original'].append(original_similarity_matrix[i, i+1].item())
+            paired_similarities['non_quantized'].append(non_quant_similarity_matrix[i, i+1].item())
+            
+            # Store random similarities (non-paired samples)
+            # for j in range(similarity_matrix.shape[0]):
+            #     if j != i and j != i+1:
+            #         random_similarities['quantized'].append(similarity_matrix[i, j].item())
+            #         random_similarities['original'].append(original_similarity_matrix[i, j].item())
+            #         random_similarities['non_quantized'].append(non_quant_similarity_matrix[i, j].item())
+        
+        
         # flatten the similarity matrices
         similarity_matrix = similarity_matrix.flatten()
         original_similarity_matrix = original_similarity_matrix.flatten()
-
+        non_quant_similarity_matrix = non_quant_similarity_matrix.flatten()
         loss = F.mse_loss(similarity_matrix, original_similarity_matrix)
         # print(f"Loss: {loss.item()}")
         # calculate the spearman correlation between the original similarity matrix and the quantized similarity matrix
         spearman_corr = spearmanr(similarity_matrix.cpu().numpy(), original_similarity_matrix.cpu().numpy())
         pearson_corr = pearsonr(similarity_matrix.cpu().numpy(), original_similarity_matrix.cpu().numpy())
+        
+        spearman_corr_non_quant = spearmanr(non_quant_similarity_matrix.cpu().numpy(), original_similarity_matrix.cpu().numpy())
+        pearson_corr_non_quant = pearsonr(non_quant_similarity_matrix.cpu().numpy(), original_similarity_matrix.cpu().numpy())
+        
+        random_similarities['quantized'] = similarity_matrix.mean().item(), similarity_matrix.std().item()
+        random_similarities['original'] = original_similarity_matrix.mean().item(), original_similarity_matrix.std().item()
+        random_similarities['non_quantized'] = non_quant_similarity_matrix.mean().item(), non_quant_similarity_matrix.std().item()
+                    
+        similarity_stats = {}
+        for embed_type in ['original', 'quantized', 'non_quantized']:
+            paired_mean = np.mean(paired_similarities[embed_type])
+            paired_std = np.std(paired_similarities[embed_type])
+            # random_mean = np.mean(random_similarities[embed_type])
+            # random_std = np.std(random_similarities[embed_type])
+            
+            random_mean = random_similarities[embed_type][0]
+            random_std = random_similarities[embed_type][1]
+            
+            similarity_stats[f'{embed_type}_paired_mean'] = paired_mean
+            similarity_stats[f'{embed_type}_paired_std'] = paired_std
+            similarity_stats[f'{embed_type}_random_mean'] = random_mean
+            similarity_stats[f'{embed_type}_random_std'] = random_std
+            similarity_stats[f'{embed_type}_contrast'] = paired_mean - random_mean
+
+
+        
         # print(f"Spearman Correlation: {spearman_corr.correlation}")
         average_loss += loss.item()
         average_spearman_corr += spearman_corr.correlation
         average_pearson_corr += pearson_corr.correlation
+        average_spearman_corr_non_quant += spearman_corr_non_quant.correlation
+        average_pearson_corr_non_quant += pearson_corr_non_quant.correlation
     return {
+        **similarity_stats, 
         'loss': average_loss / min(idx, len(dataloader)),
         'spearman_correlation': average_spearman_corr / min(idx, len(dataloader)),
-        'pearson_correlation': average_pearson_corr / min(idx, len(dataloader))
+        'pearson_correlation': average_pearson_corr / min(idx, len(dataloader)),
+        'spearman_correlation_non_quant': average_spearman_corr_non_quant / min(idx, len(dataloader)),
+        'pearson_correlation_non_quant': average_pearson_corr_non_quant / min(idx, len(dataloader))
     }
 
 
@@ -83,6 +150,7 @@ def check_loss(embedding_model, quantization_module, dataloader):
 def main():
     embedding_model = AutoModel.from_pretrained(base_model_name)  
     embedding_dim = embedding_model.config.hidden_size  # e.g., 384  
+    print(f"Embedding dimension: {embedding_dim}")
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
     dataloader = get_dataloader(base_model_name, batch_size)
     
@@ -200,7 +268,16 @@ def main():
             data.append({
                 'Model': model,
                 'Loss': results['loss'],
-                'Spearman Correlation': results['spearman_correlation']
+                'Spearman Correlation': results['spearman_correlation'],
+                'Pearson Correlation': results['pearson_correlation'],
+                'Spearman Correlation Non-Quant': results['spearman_correlation_non_quant'],
+                'Pearson Correlation Non-Quant': results['pearson_correlation_non_quant'],
+                'Original Paired/Random': f"{results['original_paired_mean']:.3f}±{results['original_paired_std']:.3f} / {results['original_random_mean']:.3f}±{results['original_random_std']:.3f}",
+                'Quantized Paired/Random': f"{results['quantized_paired_mean']:.3f}±{results['quantized_paired_std']:.3f} / {results['quantized_random_mean']:.3f}±{results['quantized_random_std']:.3f}",
+                'Non-Quantized Paired/Random': f"{results['non_quantized_paired_mean']:.3f}±{results['non_quantized_paired_std']:.3f} / {results['non_quantized_random_mean']:.3f}±{results['non_quantized_random_std']:.3f}",
+                'Original Contrast': results['original_contrast'],
+                'Quantized Contrast': results['quantized_contrast'],
+                'Non-Quantized Contrast': results['non_quantized_contrast']
             })
     
     results_df = pd.DataFrame(data)

@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std
+from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std, temperature
 from tqdm import tqdm
 
 from dataset import CombinedSimilarityDataset
@@ -14,7 +14,7 @@ from dataset import CombinedSimilarityDataset
 
 import os  
 from datetime import datetime  
-from common import create_save_directory, save_quantization_module, similarity_preservation_loss
+from common import create_save_directory, save_quantization_module, similarity_preservation_loss, matching_preserving_loss, rank_preserving_loss
 from improved_quantisation_module import ImprovedQuantizationModule, train_improved_quantization
 
 # Stage 1: Implement per-dimension thresholds  
@@ -48,7 +48,7 @@ class QuantizationModuleStage1(nn.Module):
         v = embeddings - self.thresholds  # Broadcasting over batch size  
   
         # Apply sigmoid function as a soft thresholding  
-        k = 10  # Temperature parameter controlling the steepness  
+        k = temperature  # Temperature parameter controlling the steepness  
         quantized_embeddings = torch.sigmoid(k * v)  
   
         return quantized_embeddings if not binary else (quantized_embeddings > 0.5).float()
@@ -89,13 +89,13 @@ class QuantizationModuleStage2(nn.Module):
         # First half processing remains the same
         embeddings_first_half = embeddings[:, :self.half_dim]
         v_first = embeddings_first_half - self.thresholds_first_half
-        k = 10
+        k = temperature
         quantized_first_half = torch.sigmoid(k * v_first)
 
         # Second half: properly reshape for pairs
         embeddings_second_half = embeddings[:, self.half_dim:]
         # Reshape to (batch_size, num_pairs, 2)
-        embeddings_pairs = embeddings_second_half.view(-1, self.half_dim // 2, 2)
+        embeddings_pairs = embeddings_second_half.reshape(-1, self.half_dim // 2, 2)
         
         # Reshape thresholds to match embedding pairs (add batch dimension)
         thresholds_pairs = self.thresholds_second_half.unsqueeze(0)  # Shape: (1, num_pairs, 2)
@@ -144,7 +144,7 @@ def train_quantization_stage1(embedding_model, quantization_module, dataloader, 
   
             quantized_embeddings = quantization_module(embeddings)  
   
-            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * torch.norm(quantization_module.thresholds, 2)
+            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * torch.norm(quantization_module.thresholds, 2) + matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
   
             optimizer.zero_grad()  
             loss.backward()  
@@ -188,7 +188,7 @@ def train_quantization_stage2(embedding_model, quantization_module, dataloader, 
   
             quantized_embeddings = quantization_module(embeddings)  
   
-            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * torch.norm(quantization_module.thresholds_first_half, 2) + reg_strength * torch.norm(quantization_module.thresholds_second_half, 2)
+            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * torch.norm(quantization_module.thresholds_first_half, 2) + reg_strength * torch.norm(quantization_module.thresholds_second_half, 2) + matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
   
             optimizer.zero_grad()  
             loss.backward()  

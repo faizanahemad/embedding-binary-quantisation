@@ -7,14 +7,14 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std
+from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std, temperature
 
 from dataset import CombinedSimilarityDataset
 
 
 import os  
 from datetime import datetime  
-from common import create_save_directory, save_quantization_module, similarity_preservation_loss
+from common import create_save_directory, save_quantization_module, similarity_preservation_loss, matching_preserving_loss, rank_preserving_loss
 from improved_quantisation_module import ImprovedQuantizationModule, train_improved_quantization
 
 # Stage 1: Implement per-dimension thresholds  
@@ -35,7 +35,7 @@ class QuantizationModuleStage1WithScales(nn.Module):
             self.thresholds = nn.Parameter(torch.zeros(embedding_dim) + torch.randn(embedding_dim) * init_std)  
             
         self.scales = nn.Parameter(torch.ones(embedding_dim) + torch.randn(embedding_dim) * init_std)
-        self.temperature = 10
+        self.temperature = temperature
         
   
     def forward(self, embeddings, binary=False):  
@@ -92,7 +92,7 @@ def train_quantization_stage1_with_scales(embedding_model, quantization_module, 
             scale_reg = torch.norm(torch.abs(quantization_module.scales) - 1, 2)
             
   
-            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * (torch.norm(quantization_module.thresholds, 2) + scale_reg)
+            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * (torch.norm(quantization_module.thresholds, 2) + scale_reg) + matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
   
             optimizer.zero_grad()  
             loss.backward()  

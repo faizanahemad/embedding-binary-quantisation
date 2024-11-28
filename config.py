@@ -6,16 +6,18 @@ lr = 0.0001
 
 init_std = 0.01
 
+temperature = 1
+
 
 
 epsilon=1e-8
 
 
 train_modules = [
-    # 'stage1', 
-    # 'stage2', 
-    # 'stage3', 
-    # 'stage1.1',
+    'stage1', 
+    'stage2', 
+    'stage3', 
+    'stage1.1',
     'OneBitTwoBit'
 ] # 'stage1', 'stage2'
 
@@ -24,12 +26,12 @@ test_modules = [
     'stage2', 
     'stage3', 
     'stage1.1',
-    # 'OneBitTwoBit'
+    'OneBitTwoBit'
 ]
 save_dirs = [
-    'run_20241125_1450', 
-    'run_20241125_1450', 
-    'run_20241125_1450', 
-    'run_20241125_1450', 
-    'run_20241125_1450', 
+    'run_20241127_1836', 
+    'run_20241127_1836', 
+    'run_20241127_1836', 
+    'run_20241127_1836', 
+    'run_20241127_1836', 
 ]
