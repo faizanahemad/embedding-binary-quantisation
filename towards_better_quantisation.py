@@ -15,11 +15,11 @@ from dataset import CombinedSimilarityDataset
 import os  
 from datetime import datetime  
 from common import create_save_directory, save_quantization_module, similarity_preservation_loss, matching_preserving_loss, rank_preserving_loss
-from improved_quantisation_module import ImprovedQuantizationModule, train_improved_quantization
+from basic_quantization_modules import QuantizationModuleStage1
 
 # Stage 1: Implement per-dimension thresholds  
   
-class QuantizationModuleStage1WithScales(nn.Module):  
+class QuantizationModuleStage1WithScales(QuantizationModuleStage1):  
     """  
     Quantization Module for Stage 1: Per-dimension thresholds.  
   
@@ -27,7 +27,7 @@ class QuantizationModuleStage1WithScales(nn.Module):
         thresholds (nn.Parameter): Learnable thresholds of shape (embedding_dim,)  
     """  
     def __init__(self, embedding_dim, initial_thresholds=None):  
-        super(QuantizationModuleStage1WithScales, self).__init__()  
+        super(QuantizationModuleStage1WithScales, self).__init__(embedding_dim)  
         if initial_thresholds is not None:  
             self.thresholds = nn.Parameter(initial_thresholds)  
         else:  
@@ -70,6 +70,34 @@ def train_quantization_stage1_with_scales(embedding_model, quantization_module, 
         dataloader (DataLoader): DataLoader for the dataset  
         num_epochs (int): Number of training epochs  
     """  
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  
+    # Determine the device to use (GPU if available)  
+    
+    embedding_model.to(device)  
+    quantization_module.to(device)
+    
+    # Initialize thresholds using sample embeddings
+    with torch.no_grad():
+        i = 0
+        for batch in tqdm(dataloader, desc="Initializing Thresholds", total=len(dataloader)):
+            input_ids = batch['input_ids'].to(device)  
+            attention_mask = batch['attention_mask'].to(device)  
+            embeddings = embedding_model(input_ids=input_ids, attention_mask=attention_mask)  
+            embeddings = embeddings.last_hidden_state.mean(dim=1)  # Mean pooling over sequence length
+            
+            if i == 0:
+                quantization_module.thresholds.data = quantization_module.initialize_thresholds(embeddings)
+                i += 1
+            else:
+                quantization_module.thresholds.data = 0.99 * quantization_module.thresholds.data + \
+                    0.01 * quantization_module.initialize_thresholds(embeddings)
+
+    print(f"[DEBUG] Thresholds after initialization: {quantization_module.thresholds}")
+
+    # return quantization_module
+    
+    original_thresholds = quantization_module.thresholds.data.clone().detach()
+    
     optimizer = optim.Adam(quantization_module.parameters(), lr=lr)  
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=lr, epochs=num_epochs, steps_per_epoch=len(dataloader))
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -92,7 +120,7 @@ def train_quantization_stage1_with_scales(embedding_model, quantization_module, 
             scale_reg = torch.norm(torch.abs(quantization_module.scales) - 1, 2)
             
   
-            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * (torch.norm(quantization_module.thresholds, 2) + scale_reg) + matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
+            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * (torch.norm(quantization_module.thresholds - original_thresholds, 2) + scale_reg) + matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
   
             optimizer.zero_grad()  
             loss.backward()  

@@ -238,11 +238,11 @@ class QuantizedEmbeddingModel(Wrapper, Encoder):
         )  
         embeddings = torch.tensor(embeddings)  
         embeddings = embeddings.to(device)
-        print(f"[DEBUG] QuantizedEmbeddingModel.encode() - embeddings shape: {embeddings.shape}")
+        # print(f"[DEBUG] QuantizedEmbeddingModel.encode() - embeddings shape: {embeddings.shape}")
         
         with torch.no_grad():  
-            quantized_embeddings = self.quantization_module(embeddings, binary=False).cpu().numpy()
-        print(f"[DEBUG] QuantizedEmbeddingModel.encode() - quantized_embeddings shape: {quantized_embeddings.shape}")
+            quantized_embeddings = self.quantization_module(embeddings, binary=True).cpu().numpy()
+        # print(f"[DEBUG] QuantizedEmbeddingModel.encode() - quantized_embeddings shape: {quantized_embeddings.shape}")
             
         
         return quantized_embeddings  

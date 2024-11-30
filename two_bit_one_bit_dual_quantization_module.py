@@ -105,15 +105,27 @@ class QuantizationModuleOneBitTwoBit(nn.Module):
         Returns:  
             torch.Tensor: Initialized thresholds, shape (embedding_dim, num_thresholds).  
         """  
-        sample_embeddings = torch.tensor(sample_embeddings, dtype=torch.float32)  
+        sample_embeddings = sample_embeddings.clone().detach() if torch.is_tensor(sample_embeddings) else torch.tensor(sample_embeddings, dtype=torch.float32)  
         thresholds = []  
-        for dim in range(self.embedding_dim):  
-            # Get the values for this dimension  
-            values = sample_embeddings[:, dim]  
-            # Compute percentiles to bisect the distribution  
-            percentiles = torch.quantile(values, torch.linspace(0.25, 0.75, self.num_thresholds))  
-            thresholds.append(percentiles)  
-        thresholds = torch.stack(thresholds)  
+        quantiles = torch.linspace(0.25, 0.75, self.num_thresholds, device=sample_embeddings.device)
+        # print(f"[DEBUG] QuantizationModuleOneBitTwoBit.initialize_thresholds() - quantiles shape: {quantiles.shape}, quantiles: {quantiles}")
+        # for dim in range(self.embedding_dim):  
+        #     # Get the values for this dimension  
+        #     values = sample_embeddings[:, dim]  
+        #     # Compute percentiles to bisect the distribution  
+        #     percentiles = torch.quantile(values, quantiles)  
+        #     thresholds.append(percentiles)  
+        # thresholds = torch.stack(thresholds)  
+        # print(f"[DEBUG] QuantizationModuleOneBitTwoBit.initialize_thresholds() - thresholds shape: {thresholds.shape}, sample_embeddings shape: {sample_embeddings.shape}")
+        percentiles = torch.quantile(sample_embeddings, quantiles, dim=0, keepdim=True)
+        # Reshape percentiles from [3, 1, 384] to [384, 3] to match thresholds shape
+        percentiles = percentiles.squeeze(1).transpose(0,1)
+        # print(f"[DEBUG] QuantizationModuleOneBitTwoBit.initialize_thresholds() - percentiles shape: {percentiles.shape}")
+        # check if percentiles are same as thresholds
+        thresholds = percentiles
+        # assert torch.allclose(percentiles, thresholds)
+        # print(f"[DEBUG] QuantizationModuleOneBitTwoBit.initialize_thresholds() - thresholds shape: {thresholds.shape}, percentiles shape: {percentiles.shape}")
+        # print(f"[DEBUG] QuantizationModuleOneBitTwoBit.initialize_thresholds() - thresholds: \n{thresholds}")
         return thresholds  
   
     def compute_initial_importance(self, sample_embeddings):  
@@ -368,46 +380,47 @@ class QuantizationModuleOneBitTwoBit(nn.Module):
 
             return quantized_embeddings  
   
-    def multi_bit_quantization(self, embeddings, dims):  
-        """  
-        Applies 2-bit quantization to the specified dimensions.  
-  
-        This method quantizes the embeddings using three thresholds per dimension,  
-        resulting in four quantization levels (0-3). Soft assignments are used to  
-        allow gradient flow during training.  
-  
-        Args:  
-            embeddings (torch.Tensor): Embeddings to quantize, shape (batch_size, num_dims).  
-            dims (torch.Tensor): Indices of dimensions being quantized.  
-  
-        Returns:  
-            torch.Tensor: Quantized embeddings, shape (batch_size, num_dims).  
-        """  
-        # Extract thresholds for the specified dimensions  
-        thresholds = self.thresholds[dims, :]  # Shape: (num_dims, num_thresholds)  
-  
-        # Enforce ordering constraints on thresholds by sorting  
-        thresholds = torch.sort(thresholds, dim=1)[0]  # Now thresholds are sorted per dimension  
-  
-        # Expand dimensions for broadcasting  
-        embeddings_expanded = embeddings.unsqueeze(2)  # Shape: (batch_size, num_dims, 1)  
-        thresholds_expanded = thresholds.unsqueeze(0)  # Shape: (1, num_dims, num_thresholds)  
-  
-        # Compute soft assignments  
-        k = temperature  # Temperature parameter controlling the steepness  
-        logits = k * (embeddings_expanded - thresholds_expanded)  # Shape: (batch_size, num_dims, num_thresholds)  
-        sigma = torch.sigmoid(logits)  
-  
-        # Compute probabilities for each quantization level  
-        # Append 0 and 1 to handle the edges  
-        sigma = torch.cat([torch.zeros_like(sigma[:, :, :1]), sigma, torch.ones_like(sigma[:, :, :1])], dim=2)  
-        # Probabilities for each level are differences of adjacent sigmas  
-        probabilities = sigma[:, :, 1:] - sigma[:, :, :-1]  # Shape: (batch_size, num_dims, num_levels)  
-  
-        # Quantization levels  
-        levels = torch.arange(self.num_thresholds + 1, dtype=torch.float32).to(embeddings.device)  
-        quantized_embeddings = torch.einsum('bdi,i->bd', probabilities, levels)  
-        return quantized_embeddings  
+    def multi_bit_quantization(self, embeddings, dims):
+        # Extract thresholds for the specified dimensions
+        thresholds = self.thresholds[dims, :]  # Shape: (num_dims, num_thresholds)
+
+        # Enforce ordering constraints on thresholds by sorting
+        thresholds = torch.sort(thresholds, dim=1)[0]
+
+        # Expand dimensions for broadcasting
+        embeddings_expanded = embeddings.unsqueeze(2)  # Shape: (batch_size, num_dims, 1)
+        thresholds_expanded = thresholds.unsqueeze(0)  # Shape: (1, num_dims, num_thresholds)
+
+        # Compute soft assignments
+        k = temperature  # Temperature parameter controlling the steepness
+        logits = k * (embeddings_expanded - thresholds_expanded)
+        sigma = torch.sigmoid(logits)  # Shape: (batch_size, num_dims, num_thresholds)
+
+        # Compute probabilities for each quantization level (0 to 3)
+        p0 = 1.0 - sigma[:, :, 0]  # Probability of being less than first threshold
+        p1 = sigma[:, :, 0] - sigma[:, :, 1]  # Between first and second threshold
+        p2 = sigma[:, :, 1] - sigma[:, :, 2]  # Between second and third threshold
+        p3 = sigma[:, :, 2]  # Greater than third threshold
+        
+        # Stack probabilities
+        probabilities = torch.stack([p0, p1, p2, p3], dim=2)  # Shape: (batch_size, num_dims, 4)
+        
+        # Ensure probabilities sum to 1
+        probabilities = F.softmax(probabilities * k, dim=2)
+
+        # Quantization levels (0 to 3)
+        levels = torch.arange(4, dtype=torch.float32, device=embeddings.device)
+        
+        # Compute weighted sum
+        quantized_embeddings = torch.einsum('bdk,k->bd', probabilities, levels)
+
+        if self.training:
+            print(f"[DEBUG] Value: {embeddings[0,0].item():.4f}")
+            print(f"[DEBUG] Thresholds: {thresholds[0]}")
+            print(f"[DEBUG] Probabilities: {probabilities[0,0]}")
+            print(f"[DEBUG] Quantized value: {quantized_embeddings[0,0].item():.4f}")
+
+        return quantized_embeddings
   
     def single_bit_quantization(self, embeddings, dims):  
         """  
@@ -472,7 +485,7 @@ import torch.optim as optim
 import torch.nn.functional as F  
 from tqdm import tqdm  
   
-def train_quantization_module_one_bit_two_bit(embedding_model, quantization_module, dataloader, num_epochs=5, lr=1e-3, reg_strength=1e-5):  
+def train_quantization_module_one_bit_two_bit(embedding_model, quantization_module: QuantizationModuleOneBitTwoBit, dataloader, num_epochs=5, lr=1e-3, reg_strength=1e-5):  
     """  
     Train the QuantizationModule.  
   
@@ -490,17 +503,38 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
     Returns:  
         QuantizationModule: The trained quantization module.  
     """  
-  
+    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  
+    # Determine the device to use (GPU if available)  
+    
+    embedding_model.to(device)  
+    quantization_module.to(device)  
+    
+    with torch.no_grad():
+        i = 0
+        for batch in tqdm(dataloader, desc="Initializing Thresholds", total=len(dataloader)):
+            input_ids = batch['input_ids'].to(device)  
+            attention_mask = batch['attention_mask'].to(device)  
+            embeddings = embedding_model(input_ids=input_ids, attention_mask=attention_mask)  
+            embeddings = embeddings.last_hidden_state.mean(dim=1)  # Mean pooling over sequence length  
+            if i == 0:
+                quantization_module.thresholds.data = quantization_module.initialize_thresholds(embeddings)
+                i += 1
+            else:
+                quantization_module.thresholds.data = 0.99 * quantization_module.thresholds.data + 0.01 * quantization_module.initialize_thresholds(embeddings)
+                
+    print(f"[DEBUG] QuantizationModuleOneBitTwoBit.train_quantization_module_one_bit_two_bit() - thresholds: {quantization_module.thresholds}")
+    # return quantization_module
+    
+    original_thresholds = quantization_module.thresholds.data.clone().detach()
+
     # Set up the optimizer and learning rate scheduler  
     optimizer = optim.Adam(quantization_module.parameters(), lr=lr)  
     scheduler = optim.lr_scheduler.OneCycleLR(  
         optimizer, max_lr=lr, epochs=num_epochs, steps_per_epoch=len(dataloader)  
     )  
   
-    # Determine the device to use (GPU if available)  
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  
-    embedding_model.to(device)  
-    quantization_module.to(device)  
+    
   
     # Set the embedding model to evaluation mode and freeze its parameters  
     embedding_model.eval()  
@@ -531,7 +565,7 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
             quantized_embeddings = quantization_module(embeddings, binary=False)  
   
             # Compute the similarity preservation loss  
-            loss_similarity = similarity_preservation_loss(embeddings, quantized_embeddings) + matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
+            loss_similarity = similarity_preservation_loss(embeddings, quantized_embeddings) + matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings) + reg_strength * torch.norm(quantization_module.thresholds - original_thresholds, 2)
   
             # Regularization: L2 norm of the thresholds to prevent them from growing too large  
             reg_thresholds = torch.norm(quantization_module.thresholds, p=2)  

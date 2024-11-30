@@ -49,11 +49,12 @@ def check_loss(embedding_model, quantization_module, dataloader):
         'non_quantized': []
     }
     idx = 0
-    for batch in tqdm(dataloader):  
+    use_batches = 30
+    for batch in tqdm(dataloader, total=use_batches):  
         input_ids = batch['input_ids'].squeeze(1).to(device)  # Remove extra dimension  
         attention_mask = batch['attention_mask'].squeeze(1).to(device)  
         idx += 1
-        if idx > 10:
+        if idx > use_batches:
             break
 
         with torch.no_grad():  
