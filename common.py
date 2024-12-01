@@ -111,6 +111,57 @@ def rank_preserving_loss(original_embeddings, quantized_embeddings):
     loss = loss.sum() / (mask.sum() + 1e-6)
     
     return loss
+
+
+def contrastive_loss(embeddings, temperature=0.05):
+    """
+    Compute InfoNCE/SimCSE style contrastive loss with temperature scaling.
+    
+    Args:
+        embeddings (torch.Tensor): Batch of embeddings (batch_size, embedding_dim)
+        temperature (float): Temperature parameter to scale similarities. 
+                           Lower values make the model more sensitive to differences.
+        
+    Returns:
+        loss (torch.Tensor): Scalar contrastive loss value
+    """
+    # Normalize embeddings
+    embeddings = F.normalize(embeddings, p=2, dim=1)
+    
+    # Compute similarity matrix with temperature scaling
+    sim_matrix = torch.matmul(embeddings, embeddings.t())
+    
+    # Create positive pair mask
+    batch_size = embeddings.shape[0]
+    pos_mask = torch.zeros((batch_size, batch_size), device=embeddings.device)
+    
+    # Mark consecutive pairs as positive: (0,1), (2,3), etc.
+    for i in range(0, batch_size-1, 2):
+        pos_mask[i, i+1] = 1
+        pos_mask[i+1, i] = 1
+    
+    # Apply temperature scaling before exponentiation
+    sim_matrix = sim_matrix / temperature
+    
+    # For each anchor, get its positive similarity and all similarities
+    exp_sim_matrix = torch.exp(sim_matrix)
+    
+    # Zero out diagonal to exclude self-similarity
+    exp_sim_matrix = exp_sim_matrix * (1 - torch.eye(batch_size, device=embeddings.device))
+    
+    # Compute positive similarities
+    pos_sim = exp_sim_matrix * pos_mask
+    
+    # Sum positive similarities (should be only one per row)
+    pos_sim = pos_sim.sum(dim=1)
+    
+    # Sum all similarities for denominator (excluding self-similarity)
+    all_sim = exp_sim_matrix.sum(dim=1)
+    
+    # Compute loss: -log(pos_sim / all_sim)
+    loss = -torch.log(pos_sim / all_sim + 1e-8)  # Add epsilon for numerical stability
+    
+    return loss.mean()
     
   
 
@@ -193,6 +244,62 @@ class OriginalEmbeddingModel(Wrapper, Encoder):
         # sys.stderr.flush()
         
         return embeddings  
+    
+    
+class OriginalEmbeddingModelBinary(Wrapper, Encoder):  
+    """  
+    Original embedding model without any quantization.  
+  
+    This model uses the pre-trained embedding model directly.  
+    """  
+    def __init__(self, model_name: str):  
+        self.model = SentenceTransformer(model_name)  
+        self.model.to(device)
+        self.model_card_data = {
+            "model_name": model_name,
+            "base_model": model_name,
+            "base_model_revision": None,
+            "language": ["en"],
+            "similarity_fn_name": "cos_sim"
+        }
+        # print("[INIT] Finished creating OriginalEmbeddingModel\n")
+        
+    def __call__(self, *args, **kwargs):
+        # print("\n[DEBUG] OriginalEmbeddingModel.__call__ was invoked")
+        return self.encode(*args, **kwargs)
+        
+  
+    def encode(self, sentences: List[str], **kwargs) -> np.ndarray:  
+        """  
+        Encode sentences into embeddings.  
+  
+        Args:  
+            sentences (List[str]): List of sentences to encode.  
+  
+        Returns:  
+            np.ndarray: Array of embeddings.  
+        """  
+        # raise NotImplementedError("OriginalEmbeddingModel should not be used for encoding")
+        # print("\n[DEBUG] Starting OriginalEmbeddingModel.encode()")
+        # print(f"Encoding {len(sentences)} sentences with OriginalEmbeddingModel")
+        # print("\n[ENCODE] Starting encode method", file=sys.stderr)  # Print to stderr
+        # sys.stderr.flush()  # Force flush stderr
+        # # Log to file as well
+        # with open('debug.log', 'a') as f:
+        #     f.write(f"\nEncoding {len(sentences)} sentences\n")
+        
+        embeddings = self.model.encode(  
+            sentences,  
+            show_progress_bar=kwargs.get('show_progress_bar', True),  
+            # batch_size=kwargs.get('batch_size', 32),  
+            encode_kwargs = {'batch_size': kwargs.get('batch_size', batch_size)},
+            normalize_embeddings=True  
+        )  
+        # print("[DEBUG] Finished OriginalEmbeddingModel.encode()\n")
+        # print("[ENCODE] Finished encode method\n", file=sys.stderr)
+        # sys.stderr.flush()
+        
+        return (embeddings > 0).astype(np.float32)
   
 
 class QuantizedEmbeddingModel(Wrapper, Encoder):  
@@ -234,7 +341,7 @@ class QuantizedEmbeddingModel(Wrapper, Encoder):
             show_progress_bar=kwargs.get('show_progress_bar', False),  
             
             encode_kwargs = {'batch_size': kwargs.get('batch_size', batch_size)},
-            normalize_embeddings=False  # Do not normalize before quantization  
+            normalize_embeddings=True  # Do not normalize before quantization  
         )  
         embeddings = torch.tensor(embeddings)  
         embeddings = embeddings.to(device)
@@ -246,4 +353,13 @@ class QuantizedEmbeddingModel(Wrapper, Encoder):
             
         
         return quantized_embeddings  
-  
+    
+    
+def mean_pool_and_L2_normalize(embeddings, attention_mask):
+    # Mean pooling with attention mask to ignore padded tokens
+    attention_mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.last_hidden_state.size()).float()
+    sum_embeddings = torch.sum(embeddings.last_hidden_state * attention_mask_expanded, 1)
+    sum_mask = attention_mask_expanded.sum(1)
+    embeddings = sum_embeddings / sum_mask  # Get average ignoring padded tokens
+    embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
+    return embeddings

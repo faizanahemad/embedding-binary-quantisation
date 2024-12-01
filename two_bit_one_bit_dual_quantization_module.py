@@ -19,7 +19,7 @@ from dataset import CombinedSimilarityDataset
 
 import os  
 from datetime import datetime  
-from common import create_save_directory, matching_preserving_loss, rank_preserving_loss, save_quantization_module, similarity_preservation_loss
+from common import *
 
 
 class QuantizationModuleOneBitTwoBit(nn.Module):  
@@ -516,12 +516,13 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
             input_ids = batch['input_ids'].to(device)  
             attention_mask = batch['attention_mask'].to(device)  
             embeddings = embedding_model(input_ids=input_ids, attention_mask=attention_mask)  
-            embeddings = embeddings.last_hidden_state.mean(dim=1)  # Mean pooling over sequence length  
+            embeddings = mean_pool_and_L2_normalize(embeddings, attention_mask)
             if i == 0:
                 quantization_module.thresholds.data = quantization_module.initialize_thresholds(embeddings)
                 i += 1
             else:
-                quantization_module.thresholds.data = 0.99 * quantization_module.thresholds.data + 0.01 * quantization_module.initialize_thresholds(embeddings)
+                quantization_module.thresholds.data = 0.999 * quantization_module.thresholds.data + \
+                    0.001 * quantization_module.initialize_thresholds(embeddings)
                 
     print(f"[DEBUG] QuantizationModuleOneBitTwoBit.train_quantization_module_one_bit_two_bit() - thresholds: {quantization_module.thresholds}")
     # return quantization_module
@@ -529,7 +530,7 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
     original_thresholds = quantization_module.thresholds.data.clone().detach()
 
     # Set up the optimizer and learning rate scheduler  
-    optimizer = optim.Adam(quantization_module.parameters(), lr=lr)  
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, quantization_module.parameters()), lr=lr)  
     scheduler = optim.lr_scheduler.OneCycleLR(  
         optimizer, max_lr=lr, epochs=num_epochs, steps_per_epoch=len(dataloader)  
     )  
@@ -557,21 +558,24 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
   
             # Obtain embeddings from the embedding model  
             # Note: embeddings need to have requires_grad=True for importance computation  
-            embeddings = embedding_model(input_ids=input_ids, attention_mask=attention_mask)  
-            embeddings = embeddings.last_hidden_state.mean(dim=1)  # Mean pooling over sequence length  
+            with torch.no_grad():   
+                embeddings = embedding_model(input_ids=input_ids, attention_mask=attention_mask)  
+                embeddings = mean_pool_and_L2_normalize(embeddings, attention_mask)
             embeddings.requires_grad_(True)  # Ensure embeddings have gradients  
   
             # Pass the embeddings through the quantization module  
             quantized_embeddings = quantization_module(embeddings, binary=False)  
   
             # Compute the similarity preservation loss  
-            loss_similarity = similarity_preservation_loss(embeddings, quantized_embeddings) + matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings) + reg_strength * torch.norm(quantization_module.thresholds - original_thresholds, 2)
+            loss_similarity = similarity_preservation_loss(embeddings, quantized_embeddings) + reg_strength * torch.norm(quantization_module.thresholds - original_thresholds, 2)
+            
   
             # Regularization: L2 norm of the thresholds to prevent them from growing too large  
-            reg_thresholds = torch.norm(quantization_module.thresholds, p=2)  
+            # reg_thresholds = torch.norm(quantization_module.thresholds, p=2)  
   
             # Total loss combines similarity preservation and regularization  
-            loss = loss_similarity + reg_strength * reg_thresholds  
+            loss = loss_similarity
+            loss += matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
   
             # Backpropagation and optimizer step  
             optimizer.zero_grad()  

@@ -16,10 +16,10 @@ from dataset import CombinedSimilarityDataset
 
 import os  
 from datetime import datetime  
-from common import create_save_directory, save_quantization_module, similarity_preservation_loss, matching_preserving_loss, rank_preserving_loss
+from common import *
 
-
-class ImprovedQuantizationModule(nn.Module):
+from basic_quantization_modules import QuantizationModuleStage1
+class ImprovedQuantizationModule(QuantizationModuleStage1):
     """A sophisticated embedding quantization module that combines ideas from neural network quantization,
     pruning literature, and information theory to perform adaptive binary quantization and dimension pruning.
     
@@ -115,6 +115,9 @@ class ImprovedQuantizationModule(nn.Module):
         # Temperature parameter for soft pruning
         self.temperature = 1/temperature
         self.importance_momentum = 0.99
+        
+        self.original_thresholds = self.thresholds.clone().detach()
+        self.original_thresholds.requires_grad = False
     
     def compute_importance_scores(self, embeddings):
         """Compute importance scores based on gradient and magnitude information"""
@@ -223,7 +226,35 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
         quantization_module (ImprovedQuantizationModule): Trained quantization module
         training_stats (dict): Dictionary containing training statistics
     """
-    optimizer = optim.Adam(quantization_module.parameters(), lr=lr)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  
+    # Determine the device to use (GPU if available)  
+    
+    embedding_model.to(device)  
+    quantization_module.to(device)
+    
+    # Initialize thresholds using sample embeddings
+    with torch.no_grad():
+        i = 0
+        for batch in tqdm(dataloader, desc="Initializing Thresholds", total=len(dataloader)):
+            input_ids = batch['input_ids'].to(device)  
+            attention_mask = batch['attention_mask'].to(device)  
+            embeddings = embedding_model(input_ids=input_ids, attention_mask=attention_mask)  
+            embeddings = mean_pool_and_L2_normalize(embeddings, attention_mask)
+            
+            if i == 0:
+                quantization_module.thresholds.data = 0.0001 * quantization_module.initialize_thresholds(embeddings)
+                i += 1
+            else:
+                quantization_module.thresholds.data = 0.9999 * quantization_module.thresholds.data + \
+                    0.0001 * quantization_module.initialize_thresholds(embeddings)
+
+    print(f"[DEBUG] Thresholds after initialization: \n{quantization_module.thresholds}")
+    
+    original_thresholds = quantization_module.thresholds.data.clone().detach()
+    original_thresholds.requires_grad = False
+    quantization_module.original_thresholds = original_thresholds
+    
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, quantization_module.parameters()), lr=lr)
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=lr, epochs=num_epochs, steps_per_epoch=len(dataloader))
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
@@ -257,7 +288,7 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
                     attention_mask=attention_mask
                 )
                 
-            embeddings = model_output.last_hidden_state.mean(dim=1)
+                embeddings = mean_pool_and_L2_normalize(embeddings, attention_mask)
             # Enable gradient tracking for importance scoring
             embeddings.requires_grad_(True)
             embeddings.retain_grad()  # Add this line

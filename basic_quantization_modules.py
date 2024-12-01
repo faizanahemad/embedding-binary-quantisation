@@ -14,7 +14,7 @@ from dataset import CombinedSimilarityDataset
 
 import os  
 from datetime import datetime  
-from common import create_save_directory, save_quantization_module, similarity_preservation_loss, matching_preserving_loss, rank_preserving_loss
+from common import *
 
 
 # Stage 1: Implement per-dimension thresholds  
@@ -30,9 +30,13 @@ class QuantizationModuleStage1(nn.Module):
         super(QuantizationModuleStage1, self).__init__()  
         if initial_thresholds is not None:  
             self.thresholds = nn.Parameter(initial_thresholds)  
+            # self.thresholds.data.fill_(0.0)
         else:  
             # Initialize thresholds to zero  
-            self.thresholds = nn.Parameter(torch.zeros(embedding_dim) + torch.randn(embedding_dim) * init_std)  
+            self.thresholds = nn.Parameter(torch.zeros(embedding_dim))  # + torch.randn(embedding_dim) * init_std
+            
+        self.original_thresholds = self.thresholds.data.clone().detach()
+        self.original_thresholds.requires_grad = False
             
     def initialize_thresholds(self, sample_embeddings):
         """
@@ -97,6 +101,12 @@ class QuantizationModuleStage2(nn.Module):
 
         # Thresholds for second half (pairs of thresholds)
         self.thresholds_second_half = nn.Parameter(torch.zeros(self.half_dim // 2, 2) + torch.randn(self.half_dim // 2, 2) * init_std)
+        
+        self.original_thresholds_first_half = self.thresholds_first_half.data.clone().detach()
+        self.original_thresholds_first_half.requires_grad = False
+        
+        self.original_thresholds_second_half = self.thresholds_second_half.data.clone().detach()
+        self.original_thresholds_second_half.requires_grad = False
         
     def initialize_thresholds(self, sample_embeddings):
         """
@@ -190,22 +200,27 @@ def train_quantization_stage1(embedding_model, quantization_module, dataloader, 
             input_ids = batch['input_ids'].to(device)  
             attention_mask = batch['attention_mask'].to(device)  
             embeddings = embedding_model(input_ids=input_ids, attention_mask=attention_mask)  
-            embeddings = embeddings.last_hidden_state.mean(dim=1)  # Mean pooling over sequence length
+            
+            embeddings = mean_pool_and_L2_normalize(embeddings, attention_mask)
             
             if i == 0:
-                quantization_module.thresholds.data = quantization_module.initialize_thresholds(embeddings)
+                quantization_module.thresholds.data = 0.0001 * quantization_module.initialize_thresholds(embeddings)
                 i += 1
             else:
-                quantization_module.thresholds.data = 0.99 * quantization_module.thresholds.data + \
-                    0.01 * quantization_module.initialize_thresholds(embeddings)
+                quantization_module.thresholds.data = 0.9999 * quantization_module.thresholds.data + \
+                    0.0001 * quantization_module.initialize_thresholds(embeddings)
 
     print(f"[DEBUG] Thresholds after initialization: \n{quantization_module.thresholds}")
 
-    # return quantization_module
+    
     
     original_thresholds = quantization_module.thresholds.data.clone().detach()
+    original_thresholds.requires_grad = False
+    quantization_module.original_thresholds = original_thresholds
     
-    optimizer = optim.Adam(quantization_module.parameters(), lr=lr)  
+    # return quantization_module
+    
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, quantization_module.parameters()), lr=lr)  
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=lr, epochs=num_epochs, steps_per_epoch=len(dataloader))
   
@@ -220,11 +235,12 @@ def train_quantization_stage1(embedding_model, quantization_module, dataloader, 
   
             with torch.no_grad():  
                 embeddings = embedding_model(input_ids=input_ids, attention_mask=attention_mask)  
-                embeddings = embeddings.last_hidden_state.mean(dim=1)  # Mean pooling  
+                embeddings = mean_pool_and_L2_normalize(embeddings, attention_mask)
   
             quantized_embeddings = quantization_module(embeddings)  
   
-            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * torch.norm(quantization_module.thresholds - original_thresholds, 2) + matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
+            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * torch.norm(quantization_module.thresholds - original_thresholds, 2) 
+            # loss += matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
   
             optimizer.zero_grad()  
             loss.backward()  
@@ -236,8 +252,6 @@ def train_quantization_stage1(embedding_model, quantization_module, dataloader, 
         avg_loss = total_loss / len(dataloader)  
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}')  
     return quantization_module
-    save_dir = create_save_directory()  
-    save_quantization_module(quantization_module, save_dir, 'quantization_stage1')  
     
   
 def train_quantization_stage2(embedding_model, quantization_module, dataloader, num_epochs=5):  
@@ -264,29 +278,36 @@ def train_quantization_stage2(embedding_model, quantization_module, dataloader, 
             input_ids = batch['input_ids'].squeeze(1).to(device)  
             attention_mask = batch['attention_mask'].squeeze(1).to(device)  
             embeddings = embedding_model(input_ids=input_ids, attention_mask=attention_mask)  
-            embeddings = embeddings.last_hidden_state.mean(dim=1)  # Mean pooling over sequence length
+            embeddings = mean_pool_and_L2_normalize(embeddings, attention_mask)
             
             if i == 0:
                 thresholds_first, thresholds_second = quantization_module.initialize_thresholds(embeddings)
-                quantization_module.thresholds_first_half.data = thresholds_first
-                quantization_module.thresholds_second_half.data = thresholds_second
+                quantization_module.thresholds_first_half.data = 0.0001 * thresholds_first
+                quantization_module.thresholds_second_half.data = 0.0001 * thresholds_second
                 i += 1
             else:
                 # Update thresholds with momentum
                 thresholds_first, thresholds_second = quantization_module.initialize_thresholds(embeddings)
-                quantization_module.thresholds_first_half.data = 0.99 * quantization_module.thresholds_first_half.data + \
-                    0.01 * thresholds_first
-                quantization_module.thresholds_second_half.data = 0.99 * quantization_module.thresholds_second_half.data + \
-                    0.01 * thresholds_second
+                quantization_module.thresholds_first_half.data = 0.9999 * quantization_module.thresholds_first_half.data + \
+                    0.0001 * thresholds_first
+                quantization_module.thresholds_second_half.data = 0.9999 * quantization_module.thresholds_second_half.data + \
+                    0.0001 * thresholds_second
                     
+                
+                    
+    quantization_module.thresholds_second_half.data.fill_(0.0)
     print(f"[DEBUG] Thresholds after initialization: \n{quantization_module.thresholds_first_half} \n\n{quantization_module.thresholds_second_half}")
     
     # return quantization_module
     
     original_thresholds_first_half = quantization_module.thresholds_first_half.data.clone().detach()
     original_thresholds_second_half = quantization_module.thresholds_second_half.data.clone().detach()
+    original_thresholds_first_half.requires_grad = False
+    original_thresholds_second_half.requires_grad = False
+    quantization_module.original_thresholds_first_half = original_thresholds_first_half
+    quantization_module.original_thresholds_second_half = original_thresholds_second_half
     
-    optimizer = optim.Adam(quantization_module.parameters(), lr=lr)  
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, quantization_module.parameters()), lr=lr)  
     scheduler = optim.lr_scheduler.OneCycleLR(optimizer, max_lr=lr, epochs=num_epochs, steps_per_epoch=len(dataloader))
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     embedding_model.eval()  
@@ -300,11 +321,12 @@ def train_quantization_stage2(embedding_model, quantization_module, dataloader, 
   
             with torch.no_grad():  
                 embeddings = embedding_model(input_ids=input_ids, attention_mask=attention_mask)  
-                embeddings = embeddings.last_hidden_state.mean(dim=1)  
+                embeddings = mean_pool_and_L2_normalize(embeddings, attention_mask)
   
             quantized_embeddings = quantization_module(embeddings)  
   
-            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * torch.norm(quantization_module.thresholds_first_half - original_thresholds_first_half, 2) + reg_strength * torch.norm(quantization_module.thresholds_second_half - original_thresholds_second_half, 2) + rank_preserving_loss(embeddings, quantized_embeddings)
+            loss = similarity_preservation_loss(embeddings, quantized_embeddings)  + reg_strength * torch.norm(quantization_module.thresholds_first_half - original_thresholds_first_half, 2) + reg_strength * torch.norm(quantization_module.thresholds_second_half - original_thresholds_second_half, 2)
+            loss += rank_preserving_loss(embeddings, quantized_embeddings)
   
             optimizer.zero_grad()  
             loss.backward()  
@@ -315,5 +337,3 @@ def train_quantization_stage2(embedding_model, quantization_module, dataloader, 
         avg_loss = total_loss / len(dataloader)  
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}')  
     return quantization_module
-    save_dir = create_save_directory()  
-    save_quantization_module(quantization_module, save_dir, 'quantization_stage2')  

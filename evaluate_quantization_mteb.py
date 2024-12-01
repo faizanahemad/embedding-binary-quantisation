@@ -41,7 +41,7 @@ from datetime import datetime
 from improved_quantisation_module import ImprovedQuantizationModule
 from train import QuantizationModuleStage1, QuantizationModuleStage2, QuantizationModuleStage1WithScales, QuantizationModuleOneBitTwoBit
 from config import save_dirs, test_modules
-from common import OriginalEmbeddingModel, QuantizedEmbeddingModel
+from common import OriginalEmbeddingModel, OriginalEmbeddingModelBinary, QuantizedEmbeddingModel
 batch_size = 512
   
   
@@ -217,6 +217,17 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         results_dir=results_dir
     )
     task_results['Original'] = results_original
+    
+    # 2. Original Binary
+    print("  Evaluating Original Binary...")
+    original_model_binary = OriginalEmbeddingModelBinary(model_name)
+    results_original_binary = evaluate_model_on_tasks(
+        model=original_model_binary,
+        tasks=[task],
+        model_name='OriginalBinary',
+        results_dir=results_dir
+    )
+    task_results['OriginalBinary'] = results_original_binary
 
     # 2. Stage1 Untrained
     print("  Evaluating Stage1 Untrained...")
@@ -426,6 +437,7 @@ def main():
     # Dictionary to store all results
     all_results = {
         'Original': [],
+        'OriginalBinary': [],
         'QuantStage1_Untrained': [],
         'QuantStage1_Trained': [],
         'QuantStage1.1_Trained': [],

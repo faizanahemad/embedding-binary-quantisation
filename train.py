@@ -22,7 +22,7 @@ from two_bit_one_bit_dual_quantization_module import QuantizationModuleOneBitTwo
   
 def main():  
     # Load the frozen embedding model  
-    embedding_model = AutoModel.from_pretrained(base_model_name)  
+    embedding_model = AutoModel.from_pretrained(base_model_name, trust_remote_code=True)  
     embedding_dim = embedding_model.config.hidden_size  # e.g., 384  
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
   
@@ -50,7 +50,8 @@ def main():
         import json
         thresholds_path = os.path.join(save_dir, 'stage1_thresholds.json')
         thresholds_data = {
-            'thresholds': quantization_module_stage1.thresholds.detach().cpu().numpy().tolist()
+            'thresholds': quantization_module_stage1.thresholds.detach().cpu().numpy().tolist(),
+            'original_thresholds': quantization_module_stage1.original_thresholds.detach().cpu().numpy().tolist()
         }
         with open(thresholds_path, 'w') as f:
             json.dump(thresholds_data, f, indent=4)
@@ -68,7 +69,9 @@ def main():
         thresholds_path = os.path.join(save_dir, 'stage2_thresholds.json')
         thresholds_data = {
             'thresholds_second_half': quantization_module_stage2.thresholds_second_half.detach().cpu().numpy().tolist(),
-            'thresholds_first_half': quantization_module_stage2.thresholds_first_half.detach().cpu().numpy().tolist()
+            'thresholds_first_half': quantization_module_stage2.thresholds_first_half.detach().cpu().numpy().tolist(),
+            'original_thresholds_second_half': quantization_module_stage2.original_thresholds_second_half.detach().cpu().numpy().tolist(),
+            'original_thresholds_first_half': quantization_module_stage2.original_thresholds_first_half.detach().cpu().numpy().tolist()
         }
         with open(thresholds_path, 'w') as f:
             json.dump(thresholds_data, f, indent=4)
@@ -85,7 +88,9 @@ def main():
         thresholds_path = os.path.join(save_dir, 'stage3_thresholds.json')
         thresholds_data = {
             'thresholds': quantization_module_stage3.thresholds.detach().cpu().numpy().tolist(),
-            'scales': quantization_module_stage3.scales.detach().cpu().numpy().tolist()
+            'scales': quantization_module_stage3.scales.detach().cpu().numpy().tolist(),
+            'original_thresholds': quantization_module_stage3.original_thresholds.detach().cpu().numpy().tolist(),
+            
         }
         with open(thresholds_path, 'w') as f:
             json.dump(thresholds_data, f, indent=4)
@@ -102,7 +107,9 @@ def main():
         thresholds_path = os.path.join(save_dir, 'stage1_1_thresholds.json')
         thresholds_data = {
             'thresholds': quantization_module_stage1_1.thresholds.detach().cpu().numpy().tolist(),
-            'scales': quantization_module_stage1_1.scales.detach().cpu().numpy().tolist()
+            'scales': quantization_module_stage1_1.scales.detach().cpu().numpy().tolist(),
+            'original_thresholds': quantization_module_stage1_1.original_thresholds.detach().cpu().numpy().tolist(),
+            
         }
         with open(thresholds_path, 'w') as f:
             json.dump(thresholds_data, f, indent=4)

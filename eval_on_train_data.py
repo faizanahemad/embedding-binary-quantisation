@@ -26,7 +26,7 @@ from improved_quantisation_module import ImprovedQuantizationModule
 from train import QuantizationModuleStage1, QuantizationModuleStage2, QuantizationModuleStage1WithScales, QuantizationModuleOneBitTwoBit
 from config import save_dirs, test_modules
 from tqdm import tqdm
-from common import OriginalEmbeddingModel, QuantizedEmbeddingModel, get_dataloader
+from common import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 batch_size = 512 * 2
 
@@ -59,7 +59,7 @@ def check_loss(embedding_model, quantization_module, dataloader):
 
         with torch.no_grad():  
             embeddings = embedding_model(input_ids=input_ids, attention_mask=attention_mask)  
-            embeddings = embeddings.last_hidden_state.mean(dim=1)  # Mean pooling  
+            embeddings = mean_pool_and_L2_normalize(embeddings, attention_mask)
             original_embeddings = embeddings
             non_quant_embeddings_normalized = embeddings
             if quantization_module is not None:
@@ -167,7 +167,7 @@ def main():
     
     task_results['Original'] = results_original
 
-    # 2. Stage1 Untrained
+    # 3. Stage1 Untrained
     print("  Evaluating Stage1 Untrained...")
     quantization_module_stage1_zero = QuantizationModuleStage1(embedding_dim)
     quantization_module_stage1_zero.thresholds.data.fill_(0.0)
