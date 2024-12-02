@@ -521,11 +521,11 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
                 quantization_module.thresholds.data = quantization_module.initialize_thresholds(embeddings)
                 i += 1
             else:
-                quantization_module.thresholds.data = 0.999 * quantization_module.thresholds.data + \
-                    0.001 * quantization_module.initialize_thresholds(embeddings)
+                quantization_module.thresholds.data = 0.99 * quantization_module.thresholds.data + \
+                    0.01 * quantization_module.initialize_thresholds(embeddings)
                 
     print(f"[DEBUG] QuantizationModuleOneBitTwoBit.train_quantization_module_one_bit_two_bit() - thresholds: {quantization_module.thresholds}")
-    # return quantization_module
+    return quantization_module
     
     original_thresholds = quantization_module.thresholds.data.clone().detach()
 
@@ -551,7 +551,8 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
         total_loss = 0.0  
   
         # Iterate over batches  
-        for batch in tqdm(dataloader, desc=f'Epoch {epoch+1}/{num_epochs}'):  
+        progress_bar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{num_epochs}')
+        for batch in progress_bar:  
             # Move input data to the appropriate device  
             input_ids = batch['input_ids'].to(device)  
             attention_mask = batch['attention_mask'].to(device)  
@@ -567,7 +568,7 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
             quantized_embeddings = quantization_module(embeddings, binary=False)  
   
             # Compute the similarity preservation loss  
-            loss_similarity = similarity_preservation_loss(embeddings, quantized_embeddings) + reg_strength * torch.norm(quantization_module.thresholds - original_thresholds, 2)
+            loss_similarity = similarity_preservation_loss(embeddings, quantized_embeddings) + reg_strength * torch.norm(quantization_module.thresholds - original_thresholds, 1)
             
   
             # Regularization: L2 norm of the thresholds to prevent them from growing too large  
@@ -575,7 +576,8 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
   
             # Total loss combines similarity preservation and regularization  
             loss = loss_similarity
-            loss += matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
+            # loss += matching_preserving_loss(embeddings, quantized_embeddings) + rank_preserving_loss(embeddings, quantized_embeddings)
+            # loss += contrastive_loss(embeddings)
   
             # Backpropagation and optimizer step  
             optimizer.zero_grad()  
@@ -585,6 +587,7 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
   
             # Accumulate the loss for reporting  
             total_loss += loss.item()  
+            progress_bar.set_description(f'Epoch {epoch+1}/{num_epochs} - Loss: {loss.item():.4f}')
   
         # Calculate average loss for the epoch  
         avg_loss = total_loss / len(dataloader)  

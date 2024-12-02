@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size
+from config import base_model_name, reg_strength, num_epochs, batch_size, temperature
 
 from dataset import CombinedSimilarityDataset
 
@@ -97,8 +97,8 @@ def rank_preserving_loss(original_embeddings, quantized_embeddings):
     quant_diff = sim_quant_pairs1 - sim_quant_pairs2  # [batch, batch, batch]
     
     # Use sigmoid to get soft sign of differences
-    orig_sign = torch.sigmoid(orig_diff * 10)  # Scale factor 10 makes sigmoid sharper
-    quant_sign = torch.sigmoid(quant_diff * 10)
+    orig_sign = torch.sigmoid(orig_diff * temperature)  # Scale factor 10 makes sigmoid sharper
+    quant_sign = torch.sigmoid(quant_diff * temperature)
     
     # Compute loss when relative ordering is different
     loss = F.mse_loss(quant_sign, orig_sign, reduction='none')

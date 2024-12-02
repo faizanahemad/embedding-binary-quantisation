@@ -7,7 +7,7 @@ lr = 0.0001
 
 init_std = 0.01
 
-temperature = 10
+temperature = 10 # 10 best
 
 
 
@@ -16,24 +16,26 @@ epsilon=1e-8
 
 train_modules = [
     # 'stage1', 
-    'stage2', 
-    # 'stage3', 
     # 'stage1.1',
-    # 'OneBitTwoBit',
+    # 'stage2', 
+    # 'stage3', 
+    'OneBitTwoBit',
     
 ] # 'stage1', 'stage2'
 
 test_modules = [
     # 'stage1', 
-    'stage2', 
-    # 'stage3', 
     # 'stage1.1',
-    # 'OneBitTwoBit',
+    # 'stage2', 
+    # 'stage3', 
+    'OneBitTwoBit',
 ]
 save_dirs = [
     'run_20241201_1638', 
-    'run_20241201_1638', 
-    'run_20241130_2132', 
-    'run_20241130_2132', 
-    'run_20241130_2132', 
+    'run_20241201_1755', 
+    'run_20241201_1800', 
+    '__', 
+    'run_20241202_1422', 
 ]
+
+# Thresholds are not changing with training for OneBitTwoBit
