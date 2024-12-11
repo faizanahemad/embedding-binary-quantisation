@@ -1,7 +1,7 @@
 base_model_name = "jinaai/jina-embeddings-v3"# "", "sentence-transformers/all-MiniLM-L12-v2"
 base_model_name = "sentence-transformers/all-MiniLM-L12-v2"
 reg_strength = 0.1
-num_epochs = 2
+num_epochs = 1
 batch_size = 1024
 lr = 0.0001
 max_grad_norm = 1.0

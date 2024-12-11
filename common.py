@@ -434,16 +434,17 @@ class SentenceTransformerEmbeddingCaller(OriginalEmbeddingCaller):
     
 def mean_pool_and_L2_normalize(model_output, attention_mask):
     """
-    Apply mean pooling and L2 normalization to model outputs.
+    Apply mean pooling (if needed) and L2 normalization to model outputs.
     
     Args:
         model_output (dict or torch.Tensor): Model output dictionary or tensor
             If dict: Expected to have 'sentence_embedding' or 'token_embeddings'
             If tensor: Can be either:
-                - 2D: (batch_size, embedding_dim)
-                - 3D: (batch_size, sequence_length, embedding_dim)
+                - 2D: (batch_size, embedding_dim) - no pooling needed
+                - 3D: (batch_size, sequence_length, embedding_dim) - needs pooling
         attention_mask (torch.Tensor): Attention mask for padded tokens
             Shape: (batch_size, sequence_length)
+            Only used if pooling is needed
         
     Returns:
         torch.Tensor: L2 normalized embeddings of shape (batch_size, embedding_dim)
@@ -451,35 +452,26 @@ def mean_pool_and_L2_normalize(model_output, attention_mask):
     # 1. Extract embeddings based on input type
     if isinstance(model_output, dict):
         if 'sentence_embedding' in model_output:
-            embeddings = model_output['sentence_embedding']
+            # Already pooled embeddings, just normalize
+            return F.normalize(model_output['sentence_embedding'], p=2, dim=1)
         elif 'token_embeddings' in model_output:
             embeddings = model_output['token_embeddings']
         else:
-            # Fallback to first value if standard keys not found
             embeddings = next(iter(model_output.values()))
     else:
         embeddings = model_output
 
-    # 2. Handle already pooled embeddings (2D case)
+    # 2. If already 2D (batch_size, embedding_dim), just normalize
     if len(embeddings.shape) == 2:
         return F.normalize(embeddings, p=2, dim=1)
 
-    # 3. Handle token embeddings (3D case)
-    # Shape: (batch_size, sequence_length, embedding_dim)
+    # 3. Only do pooling for 3D tensors (batch_size, sequence_length, embedding_dim)
     embedding_dim = embeddings.size(-1)
-    
-    # Expand attention mask for broadcasting
-    # Shape: (batch_size, sequence_length, embedding_dim)
     attention_mask_expanded = attention_mask.unsqueeze(-1).expand(-1, -1, embedding_dim).float()
     
     # Mean pooling with attention mask
     sum_embeddings = torch.sum(embeddings * attention_mask_expanded, 1)
-    sum_mask = torch.clamp(attention_mask.sum(1), min=1e-9)  # Avoid division by zero
-    
-    # Average pooling
+    sum_mask = torch.clamp(attention_mask.sum(1), min=1e-9)
     pooled_embeddings = sum_embeddings / sum_mask.unsqueeze(-1)
     
-    # L2 normalization
-    normalized_embeddings = F.normalize(pooled_embeddings, p=2, dim=1)
-    
-    return normalized_embeddings
+    return F.normalize(pooled_embeddings, p=2, dim=1)

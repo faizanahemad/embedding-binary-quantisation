@@ -213,12 +213,16 @@ class MatryoshkaTransformer(nn.Module):
         """  
         embeddings = {}  
         x = self.base_transform(x)  
-        prev_embedding = x  
+        prev_embedding = None  
         all_embeddings = x  
   
         for idx, block in enumerate(self.blocks):  
-            delta = block(prev_embedding)  
-            prev_embedding = torch.cat([prev_embedding, delta], dim=1)  
+            
+            delta = block(x)  
+            if prev_embedding is None:
+                prev_embedding = delta
+            else:
+                prev_embedding = torch.cat([prev_embedding, delta], dim=1)  
             all_embeddings = prev_embedding  
             dim = self.dimension_levels[idx]  
   
@@ -670,3 +674,4 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
             total_loss += loss.item()  
         avg_loss = total_loss / len(dataloader)  
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}')  
+    return matryoshka_model
