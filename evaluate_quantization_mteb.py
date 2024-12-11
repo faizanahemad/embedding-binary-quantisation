@@ -31,6 +31,7 @@ from mteb import MTEB, TaskResult
 from mteb.abstasks.AbsTask import AbsTask
 from mteb.models.wrapper import Wrapper
 from mteb.encoder_interface import Encoder
+from MatryoshkaModel.matryoshka_2bit_model import MatryoshkaEmbeddingModel
 from config import base_model_name
 
 from typing import List, Dict  
@@ -41,7 +42,7 @@ from datetime import datetime
 from improved_quantisation_module import ImprovedQuantizationModule
 from train import QuantizationModuleStage1, QuantizationModuleStage2, QuantizationModuleStage1WithScales, QuantizationModuleOneBitTwoBit
 from config import save_dirs, test_modules
-from common import OriginalEmbeddingModel, OriginalEmbeddingModelBinary, QuantizedEmbeddingModel
+from common import OriginalEmbeddingModel, OriginalEmbeddingModelBinary, QuantizedEmbeddingModel, SentenceTransformerEmbeddingCaller
 batch_size = 512
   
   
@@ -372,6 +373,21 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         )
         task_results['OneBitTwoBit_Trained'] = results_one_bit_two_bit
         
+    if 'Matryoshka' in test_modules:
+        # 7. Matryoshka Trained
+        embedding_model_name = base_model_name
+        embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
+        print("  Evaluating Matryoshka Trained...")
+        matryoshka_model = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim//16, embedding_dim//8, embedding_dim//4, embedding_dim//2, embedding_dim], train_binary=False, train_two_bit=False, expand_two_bit_to_three_bits=False)
+        matryoshka_model.load(f'saved_models/{save_dirs[5]}/matryoshka_model.pth')
+        results_matryoshka = evaluate_model_on_tasks(
+            model=matryoshka_model,
+            tasks=[task],
+            model_name='Matryoshka_Trained',
+            results_dir=results_dir
+        )
+        task_results['Matryoshka_Trained'] = results_matryoshka
+        
     # Print individual task results
     df_task_results = aggregate_results(task_results, [task])
     print(f"\nResults for task {task}:")
@@ -444,7 +460,8 @@ def main():
         'QuantStage2_Untrained': [],
         'QuantStage2_Trained': [],
         'QuantStage3_Trained': [],
-        'OneBitTwoBit_Trained': []
+        'OneBitTwoBit_Trained': [],
+        'Matryoshka_Trained': []
     }
 
     # Evaluate each task individually

@@ -78,7 +78,7 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
   
     def encode(self,  
                sentences: List[str],  
-               output_dim: int = None,  
+               output_dim: int = matryoshka_output_dim,  
                do_binary: bool = False,  
                do_two_bits: bool = False,  
                **kwargs) -> np.ndarray:  

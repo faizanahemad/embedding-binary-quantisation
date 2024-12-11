@@ -8,6 +8,8 @@ max_grad_norm = 1.0
 
 init_std = 0.001
 
+matryoshka_output_dim = 384//4
+
 temperature = 10 # 10 best
 
 
@@ -39,7 +41,7 @@ save_dirs = [
     'run_20241201_1800', 
     '__', 
     'run_20241202_1422', 
-    'run_20241202_1422', 
+    'run_20241211_1756', 
 ]
 
 # Thresholds are not changing with training for OneBitTwoBit
