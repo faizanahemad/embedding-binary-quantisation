@@ -58,6 +58,12 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
             expand_two_bit_to_three_bits=self.expand_two_bit_to_three_bits  
         )  
         self.max_dim = self.embedding_dim
+        
+    def save(self, path: str):
+        torch.save(self.transformer.state_dict(), path)
+        
+    def load(self, path: str):
+        self.transformer.load_state_dict(torch.load(path))
   
     def init_thresholds(self, sample_embeddings: torch.Tensor):  
         """  
@@ -272,7 +278,7 @@ class QuantizationLayer(nn.Module):
                  dim: int,  
                  quantization_bits: int = 1,  
                  initial_temperature: float = 5.0,  
-                 min_temperature: float = 0.5,  
+                 min_temperature: float = 0.1,  
                  expand_two_bit_to_three_bits: bool = False,  
                  annealing_rate: float = 0.95):  
         super(QuantizationLayer, self).__init__()  
@@ -384,7 +390,7 @@ class QuantizationLayer(nn.Module):
         thresholds_expanded = thresholds.unsqueeze(0)  # Shape: (1, dim, num_thresholds)  
   
         # Compute logits for sigmoid  
-        k = 10  # Temperature parameter controlling the steepness  
+        k = 1.0 / self.temperature    # Temperature parameter controlling the steepness  
         logits = k * (embeddings_expanded - thresholds_expanded)  
         sigma = torch.sigmoid(logits)  # Shape: (batch_size, dim, num_thresholds)  
   
@@ -440,7 +446,10 @@ class QuantizationLayer(nn.Module):
         """  
         # Exponential decay of temperature  
         progress = current_epoch / total_epochs  
-        new_temperature = max(self.min_temperature, self.temperature.item() * (self.annealing_rate ** progress))  
+        # Calculate the annealing rate to reach min_temperature at the end  
+        annealing_rate = (self.min_temperature / self.initial_temperature) ** (1 / total_epochs)  
+        # Update temperature  
+        new_temperature = max(self.min_temperature, self.initial_temperature * (annealing_rate ** current_epoch))  
         self.temperature.copy_(torch.tensor(new_temperature))  
   
 def multi_scale_contrastive_loss(embeddings_dict: dict,  

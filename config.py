@@ -20,22 +20,25 @@ train_modules = [
     # 'stage1.1',
     # 'stage2', 
     # 'stage3', 
-    'OneBitTwoBit',
+    # 'OneBitTwoBit',
+    'Matryoshka',
     
-] # 'stage1', 'stage2'
+] 
 
 test_modules = [
     # 'stage1', 
     # 'stage1.1',
     # 'stage2', 
     # 'stage3', 
-    'OneBitTwoBit',
+    # 'OneBitTwoBit',
+    'Matryoshka',
 ]
 save_dirs = [
     'run_20241201_1638', 
     'run_20241201_1755', 
     'run_20241201_1800', 
     '__', 
+    'run_20241202_1422', 
     'run_20241202_1422', 
 ]
 

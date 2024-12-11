@@ -10,6 +10,7 @@ from MatryoshkaModel.matryoshka_2bit_model import train_matryoshka_model, Matryo
 from config import base_model_name, reg_strength, num_epochs, batch_size, train_modules, save_dirs
 
 from dataset import CombinedSimilarityDataset
+from common import SentenceTransformerEmbeddingCaller
 
 
 import os  
@@ -132,9 +133,11 @@ def main():
         print(f"Saved thresholds to {thresholds_path}")
         
     if 'Matryoshka' in train_modules:
-        matryoshka_model = MatryoshkaModel(embedding_dim)
+        embedding_model = SentenceTransformerEmbeddingCaller(base_model_name)
+        matryoshka_model = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim], train_binary=False, train_two_bit=False, expand_two_bit_to_three_bits=False)
         matryoshka_model.to(device)
         matryoshka_model = train_matryoshka_model(embedding_model, matryoshka_model, dataloader, num_epochs=num_epochs)
+        
     
       
     print(f'Saving models to {save_dir}')
@@ -148,6 +151,8 @@ def main():
         save_quantization_module(quantization_module_stage1_1, save_dir, 'quantization_stage1_with_scales')
     if 'OneBitTwoBit' in train_modules:
         save_quantization_module(quantization_module_one_bit_two_bit, save_dir, 'one_bit_two_bit_thresholds')
+    if 'Matryoshka' in train_modules:
+        matryoshka_model.save(os.path.join(save_dir, 'matryoshka_model.pth'))
         
     # Inference example  
     return
