@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std, temperature
+from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std, temperature, max_grad_norm
 from tqdm import tqdm
 
 from dataset import CombinedSimilarityDataset
@@ -324,7 +324,7 @@ def train_improved_quantization(embedding_model, quantization_module, dataloader
             
             
             # Gradient clipping to prevent instability
-            torch.nn.utils.clip_grad_norm_(quantization_module.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(quantization_module.parameters(), max_norm=max_grad_norm)
             
             optimizer.step()
             scheduler.step()

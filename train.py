@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
+from MatryoshkaModel.matryoshka_2bit_model import train_matryoshka_model, MatryoshkaEmbeddingModel, MatryoshkaTransformer
 from config import base_model_name, reg_strength, num_epochs, batch_size, train_modules, save_dirs
 
 from dataset import CombinedSimilarityDataset
@@ -129,6 +130,11 @@ def main():
         with open(thresholds_path, 'w') as f:
             json.dump(thresholds_data, f, indent=4)
         print(f"Saved thresholds to {thresholds_path}")
+        
+    if 'Matryoshka' in train_modules:
+        matryoshka_model = MatryoshkaModel(embedding_dim)
+        matryoshka_model.to(device)
+        matryoshka_model = train_matryoshka_model(embedding_model, matryoshka_model, dataloader, num_epochs=num_epochs)
     
       
     print(f'Saving models to {save_dir}')

@@ -355,6 +355,34 @@ class QuantizedEmbeddingModel(Wrapper, Encoder):
         return quantized_embeddings  
     
     
+class OriginalEmbeddingCaller(Wrapper, Encoder):
+    def __init__(self, model_name: str, embedding_dim: int):
+        self.model_name = model_name
+        self.embedding_dim = embedding_dim
+        
+    def encode(self, sentences: List[str], **kwargs) -> np.ndarray:
+        raise NotImplementedError("OriginalEmbeddingCaller should be subclassed.")
+    
+class SentenceTransformerEmbeddingCaller(OriginalEmbeddingCaller):
+    def __init__(self, model_name: str):
+        super().__init__(model_name, None)
+        self.model = SentenceTransformer(model_name)
+        try:
+            self.embedding_dim = self.model.config.hidden_size
+        except:
+            self.embedding_dim = self.model.get_sentence_embedding_dimension()
+        self.model.to(device)
+        
+        self.model.eval()  
+        for param in self.model.parameters():  
+            param.requires_grad = False  
+        
+    def encode(self, sentences: List[str], **kwargs) -> np.ndarray:
+        with torch.no_grad(): 
+            embeddings = self.model.encode(sentences, **kwargs)
+        return embeddings
+    
+    
 def mean_pool_and_L2_normalize(embeddings, attention_mask):
     # Mean pooling with attention mask to ignore padded tokens
     attention_mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.last_hidden_state.size()).float()

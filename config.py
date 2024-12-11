@@ -4,8 +4,9 @@ reg_strength = 0.1
 num_epochs = 2
 batch_size = 1024
 lr = 0.0001
+max_grad_norm = 1.0
 
-init_std = 0.01
+init_std = 0.001
 
 temperature = 10 # 10 best
 

@@ -582,6 +582,9 @@ def train_quantization_module_one_bit_two_bit(embedding_model, quantization_modu
             # Backpropagation and optimizer step  
             optimizer.zero_grad()  
             loss.backward()  
+            # Add gradient clipping before optimizer step
+            torch.nn.utils.clip_grad_norm_(quantization_module.parameters(), max_grad_norm)
+            
             optimizer.step()  
             scheduler.step()  
   

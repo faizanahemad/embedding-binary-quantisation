@@ -7,7 +7,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std, temperature
+from config import base_model_name, reg_strength, num_epochs, batch_size, lr, init_std, temperature, max_grad_norm
 
 from dataset import CombinedSimilarityDataset
 
@@ -129,6 +129,9 @@ def train_quantization_stage1_with_scales(embedding_model, quantization_module, 
   
             optimizer.zero_grad()  
             loss.backward()  
+            # Add gradient clipping before optimizer step
+            torch.nn.utils.clip_grad_norm_(quantization_module.parameters(), max_grad_norm)
+            
             optimizer.step()  
             scheduler.step()
   
