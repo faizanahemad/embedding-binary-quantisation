@@ -609,7 +609,9 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
             embeddings = matryoshka_model.embedding_model(  
                 input_ids=input_ids,  
                 attention_mask=attention_mask,  
-            )['sentence_embedding']  
+            )
+            # convert to tensor if not already
+            embeddings = torch.tensor(embeddings)
             embeddings = F.normalize(embeddings, p=2, dim=1)  
             sample_embeddings_list.append(embeddings)  
             if len(sample_embeddings_list) >= 10:  
@@ -628,7 +630,9 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
                 embeddings = matryoshka_model.embedding_model(  
                     input_ids=input_ids,  
                     attention_mask=attention_mask,  
-                )['sentence_embedding']  
+                )
+                # convert to tensor if not already
+                embeddings = torch.tensor(embeddings)
                 embeddings = F.normalize(embeddings, p=2, dim=1)  
             embeddings = embeddings.to(device)  
             # Forward pass through transformer  

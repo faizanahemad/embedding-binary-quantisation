@@ -136,7 +136,7 @@ def main():
         embedding_model = SentenceTransformerEmbeddingCaller(base_model_name)
         matryoshka_model = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim], train_binary=False, train_two_bit=False, expand_two_bit_to_three_bits=False)
         matryoshka_model.to(device)
-        matryoshka_model = train_matryoshka_model(embedding_model, matryoshka_model, dataloader, num_epochs=num_epochs)
+        matryoshka_model = train_matryoshka_model(matryoshka_model, dataloader, num_epochs=num_epochs)
         
     
       

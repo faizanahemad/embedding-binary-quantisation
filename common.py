@@ -355,13 +355,17 @@ class QuantizedEmbeddingModel(Wrapper, Encoder):
         return quantized_embeddings  
     
     
-class OriginalEmbeddingCaller(Wrapper, Encoder):
+class OriginalEmbeddingCaller(nn.Module, Wrapper, Encoder):
     def __init__(self, model_name: str, embedding_dim: int):
+        super().__init__()
         self.model_name = model_name
         self.embedding_dim = embedding_dim
         
     def encode(self, sentences: List[str], **kwargs) -> np.ndarray:
         raise NotImplementedError("OriginalEmbeddingCaller should be subclassed.")
+    
+    def forward(self, *args, **kwargs):
+        return self.encode(*args, **kwargs)
     
 class SentenceTransformerEmbeddingCaller(OriginalEmbeddingCaller):
     def __init__(self, model_name: str):
@@ -377,17 +381,105 @@ class SentenceTransformerEmbeddingCaller(OriginalEmbeddingCaller):
         for param in self.model.parameters():  
             param.requires_grad = False  
         
-    def encode(self, sentences: List[str], **kwargs) -> np.ndarray:
-        with torch.no_grad(): 
-            embeddings = self.model.encode(sentences, **kwargs)
-        return embeddings
+    def encode(self, sentences=None, attention_mask=None, input_ids=None, **kwargs) -> np.ndarray:
+        """
+        Encode sentences into embeddings.
+        
+        Args:
+            sentences: List of strings or string or tensor of input_ids
+            attention_mask: Optional attention mask tensor
+            input_ids: Optional input_ids tensor (alternative to sentences)
+            **kwargs: Additional arguments for sentence-transformers encode
+            
+        Returns:
+            np.ndarray: Array of embeddings
+        """
+        with torch.no_grad():
+            # Case 1: Handle tensor inputs (either through sentences or input_ids)
+            if isinstance(sentences, torch.Tensor) or isinstance(input_ids, torch.Tensor):
+                # Use whichever tensor was provided
+                input_ids_tensor = sentences if isinstance(sentences, torch.Tensor) else input_ids
+                
+                if attention_mask is None:
+                    attention_mask = torch.ones_like(input_ids_tensor)
+                
+                # Ensure tensors are on the correct device
+                input_ids_tensor = input_ids_tensor.to(device)
+                attention_mask = attention_mask.to(device)
+                
+                # Process through the model's transformer
+                outputs = self.model.forward({
+                    'input_ids': input_ids_tensor, 
+                    'attention_mask': attention_mask
+                })
+                
+                # Apply mean pooling and L2 normalization
+                embeddings = mean_pool_and_L2_normalize(outputs, attention_mask)
+                return embeddings.cpu().numpy()
+            
+            # Case 2: Handle string inputs
+            elif isinstance(sentences, (list, str)):
+                embeddings = self.model.encode(
+                    sentences,
+                    show_progress_bar=kwargs.get('show_progress_bar', False),
+                    encode_kwargs={'batch_size': kwargs.get('batch_size', batch_size)},
+                    normalize_embeddings=True
+                )
+                return embeddings
+            
+            # Case 3: Invalid input
+            else:
+                raise ValueError("Input must be either a torch.Tensor, a list of strings, or a string")
+            
     
+def mean_pool_and_L2_normalize(model_output, attention_mask):
+    """
+    Apply mean pooling and L2 normalization to model outputs.
     
-def mean_pool_and_L2_normalize(embeddings, attention_mask):
-    # Mean pooling with attention mask to ignore padded tokens
-    attention_mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.last_hidden_state.size()).float()
-    sum_embeddings = torch.sum(embeddings.last_hidden_state * attention_mask_expanded, 1)
-    sum_mask = attention_mask_expanded.sum(1)
-    embeddings = sum_embeddings / sum_mask  # Get average ignoring padded tokens
-    embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
-    return embeddings
+    Args:
+        model_output (dict or torch.Tensor): Model output dictionary or tensor
+            If dict: Expected to have 'sentence_embedding' or 'token_embeddings'
+            If tensor: Can be either:
+                - 2D: (batch_size, embedding_dim)
+                - 3D: (batch_size, sequence_length, embedding_dim)
+        attention_mask (torch.Tensor): Attention mask for padded tokens
+            Shape: (batch_size, sequence_length)
+        
+    Returns:
+        torch.Tensor: L2 normalized embeddings of shape (batch_size, embedding_dim)
+    """
+    # 1. Extract embeddings based on input type
+    if isinstance(model_output, dict):
+        if 'sentence_embedding' in model_output:
+            embeddings = model_output['sentence_embedding']
+        elif 'token_embeddings' in model_output:
+            embeddings = model_output['token_embeddings']
+        else:
+            # Fallback to first value if standard keys not found
+            embeddings = next(iter(model_output.values()))
+    else:
+        embeddings = model_output
+
+    # 2. Handle already pooled embeddings (2D case)
+    if len(embeddings.shape) == 2:
+        return F.normalize(embeddings, p=2, dim=1)
+
+    # 3. Handle token embeddings (3D case)
+    # Shape: (batch_size, sequence_length, embedding_dim)
+    embedding_dim = embeddings.size(-1)
+    
+    # Expand attention mask for broadcasting
+    # Shape: (batch_size, sequence_length, embedding_dim)
+    attention_mask_expanded = attention_mask.unsqueeze(-1).expand(-1, -1, embedding_dim).float()
+    
+    # Mean pooling with attention mask
+    sum_embeddings = torch.sum(embeddings * attention_mask_expanded, 1)
+    sum_mask = torch.clamp(attention_mask.sum(1), min=1e-9)  # Avoid division by zero
+    
+    # Average pooling
+    pooled_embeddings = sum_embeddings / sum_mask.unsqueeze(-1)
+    
+    # L2 normalization
+    normalized_embeddings = F.normalize(pooled_embeddings, p=2, dim=1)
+    
+    return normalized_embeddings
