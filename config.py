@@ -8,7 +8,7 @@ max_grad_norm = 1.0
 
 init_std = 0.001
 
-matryoshka_output_dim = 384//4
+matryoshka_output_dim = 384//8
 
 temperature = 10 # 10 best
 

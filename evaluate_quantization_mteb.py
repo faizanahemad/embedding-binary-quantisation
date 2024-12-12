@@ -67,6 +67,7 @@ def evaluate_model_on_tasks(model, tasks: List[str], model_name: str, results_di
     """  
     # Create output directory if it doesn't exist  
     os.makedirs(results_dir, exist_ok=True)  
+    print(f"[DEBUG] Evaluating model: {model_name} and class {type(model)}")
   
     # Initialize MTEB with the specified tasks  
     # task_objects = MTEB(tasks=mteb.get_tasks(tasks=tasks))  
@@ -81,12 +82,14 @@ def evaluate_model_on_tasks(model, tasks: List[str], model_name: str, results_di
         # batch_size=batch_size,  
         encode_kwargs = {'batch_size': batch_size},
         output_folder=results_dir,
-        overwrite_results=True  
+        overwrite_results=True,
+        save_json=False,
+        save_csv=False
     )  
   
     # Save results to a file  
-    results_file = os.path.join(results_dir, f"{model_name}_results.json")  
-    pd.DataFrame(results).to_json(results_file)  
+    # results_file = os.path.join(results_dir, f"{model_name}_results.json")  
+    # pd.DataFrame(results).to_json(results_file)  
   
     return results  
   
@@ -374,12 +377,14 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         task_results['OneBitTwoBit_Trained'] = results_one_bit_two_bit
         
     if 'Matryoshka' in test_modules:
+        print(f"[DEBUG] Evaluating Matryoshka Trained...")
         # 7. Matryoshka Trained
         embedding_model_name = base_model_name
         embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
         print("  Evaluating Matryoshka Trained...")
         matryoshka_model = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim//16, embedding_dim//8, embedding_dim//4, embedding_dim//2, embedding_dim], train_binary=False, train_two_bit=False, expand_two_bit_to_three_bits=False)
         matryoshka_model.load(f'saved_models/{save_dirs[5]}/matryoshka_model.pth')
+        print(f"[DEBUG] Loaded model: {matryoshka_model} with class {type(matryoshka_model)}")
         results_matryoshka = evaluate_model_on_tasks(
             model=matryoshka_model,
             tasks=[task],

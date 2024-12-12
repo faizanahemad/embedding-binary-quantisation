@@ -95,6 +95,7 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
         Returns:  
             np.ndarray: Embeddings of shape (num_sentences, output_dim)  
         """  
+        print(output_dim)
         if output_dim is None:  
             output_dim = self.max_dim  
         assert output_dim in self.dimension_levels, f"Output dimension must be one of {self.dimension_levels}"  
@@ -133,6 +134,8 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
         else:  
             # Normalize embeddings  
             embeddings = F.normalize(embeddings, p=2, dim=1)  
+        assert embeddings.shape[1] == matryoshka_output_dim, f"Output dimension {embeddings.shape[1]} does not match desired output dimension {matryoshka_output_dim}"
+        print(embeddings.shape)
         return embeddings.cpu().numpy()  
   
 class MatryoshkaTransformer(nn.Module):  

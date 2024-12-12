@@ -367,6 +367,9 @@ class OriginalEmbeddingCaller(nn.Module, Wrapper, Encoder):
     def forward(self, *args, **kwargs):
         return self.encode(*args, **kwargs)
     
+    def __call__(self, *args, **kwargs):
+        return self.forward(*args, **kwargs)
+    
 class SentenceTransformerEmbeddingCaller(OriginalEmbeddingCaller):
     def __init__(self, model_name: str):
         super().__init__(model_name, None)
