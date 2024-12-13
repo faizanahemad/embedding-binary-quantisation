@@ -9,6 +9,8 @@ import numpy as np
 from config import base_model_name, reg_strength, num_epochs, batch_size, temperature
 
 from dataset import CombinedSimilarityDataset
+from typing import List
+import math
 
 
 import os  
@@ -30,6 +32,504 @@ class ModelCardData:
 
     def to_dict(self) -> dict:
         return asdict(self)
+    
+    
+class FFNLayer(nn.Module):
+    def __init__(self, input_dim, output_dim, dropout_rate=0.1, negative_slope=0.01):
+        """
+        Feed-forward neural network layer with LayerNorm, LeakyReLU, and Dropout.
+        
+        Args:
+            input_dim (int): Input dimension
+            output_dim (int): Output dimension
+            dropout_rate (float): Dropout probability (default: 0.1)
+            negative_slope (float): Negative slope for LeakyReLU (default: 0.01)
+        """
+        super(FFNLayer, self).__init__()
+        self.linear = nn.Linear(input_dim, output_dim)
+        self.layer_norm = nn.LayerNorm(output_dim)
+        self.leaky_relu = nn.LeakyReLU(negative_slope=negative_slope)
+        self.dropout = nn.Dropout(dropout_rate)
+        
+        # Calculate fan_in and fan_out for Xavier/Kaiming initialization
+        fan_in = input_dim
+        fan_out = output_dim
+        
+        # Initialize weights using Kaiming initialization
+        # Accounts for LeakyReLU's negative slope
+        std = math.sqrt(2.0 / (fan_in * (1 + negative_slope**2)))
+        nn.init.kaiming_normal_(
+            self.linear.weight, 
+            a=negative_slope, 
+            mode='fan_in', 
+            nonlinearity='leaky_relu'
+        )
+        
+        # Initialize bias
+        bound = 1 / math.sqrt(fan_in)
+        nn.init.uniform_(self.linear.bias, -bound, bound)
+        
+        # Initialize LayerNorm parameters
+        nn.init.constant_(self.layer_norm.weight, 1.0)
+        nn.init.constant_(self.layer_norm.bias, 0.0)
+
+    def forward(self, x):
+        """
+        Forward pass of the FFN layer.
+        
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, input_dim)
+            
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, output_dim)
+        """
+        x = self.linear(x)
+        x = self.layer_norm(x)  # Pre-activation normalization
+        x = self.leaky_relu(x)
+        x = self.dropout(x)
+        return x
+
+
+class SkipConnectionFFNLayer(nn.Module):
+    def __init__(self, input_dim, output_dim, dropout_rate=0.1, negative_slope=0.01):
+        """
+        FFN layer with skip connection, adapting dimensions if needed.
+        
+        Args:
+            input_dim (int): Input dimension
+            output_dim (int): Output dimension
+            dropout_rate (float): Dropout probability (default: 0.1)
+            negative_slope (float): Negative slope for LeakyReLU (default: 0.01)
+        """
+        super(SkipConnectionFFNLayer, self).__init__()
+        self.ffn_layer = FFNLayer(
+            input_dim, 
+            output_dim, 
+            dropout_rate=dropout_rate, 
+            negative_slope=negative_slope
+        )
+        
+        # Create projection layer if dimensions don't match
+        if input_dim != output_dim:
+            self.skip_connection = nn.Linear(input_dim, output_dim)
+            
+            # Initialize skip connection weights
+            fan_in = input_dim
+            fan_out = output_dim
+            
+            # Use Xavier uniform initialization for the skip connection
+            # as it doesn't have a non-linearity
+            bound = math.sqrt(6.0 / (fan_in + fan_out))
+            nn.init.uniform_(self.skip_connection.weight, -bound, bound)
+            nn.init.zeros_(self.skip_connection.bias)
+        else:
+            self.skip_connection = nn.Identity()
+
+    def forward(self, x):
+        """
+        Forward pass with skip connection.
+        
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, input_dim)
+            
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, output_dim)
+        """
+        return self.ffn_layer(x) + self.skip_connection(x)
+    
+    
+class RMSNorm(nn.Module):
+    """Root Mean Square Layer Normalization"""
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+
+    def _norm(self, x: torch.Tensor) -> torch.Tensor:
+        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.weight * self._norm(x)
+
+
+class ModernFFN(nn.Module):
+    def __init__(
+        self, 
+        input_dim: int, 
+        output_dim: int, 
+        dropout_rate: float = 0.1,
+        expansion_factor: float = 4.0,
+        activation: str = 'swiglu',
+        use_bias: bool = False,
+        multiple_of: int = 256  # Ensure hidden dim is multiple of this
+    ):
+        """
+        Modern FFN with SwiGLU/GLU variants, RMSNorm, and skip connections.
+        
+        Args:
+            input_dim: Input dimension
+            output_dim: Output dimension
+            dropout_rate: Dropout probability
+            expansion_factor: Factor to expand hidden dimension
+            activation: Activation type ('swiglu', 'geglu', 'gelu', 'silu')
+            use_bias: Whether to use bias in linear layers
+            multiple_of: Ensure hidden dim is multiple of this value
+        """
+        super().__init__()
+        
+        # Calculate hidden dimension
+        hidden_dim = int(input_dim * expansion_factor)
+        hidden_dim = multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of)
+        
+        # Pre-normalization
+        self.norm = RMSNorm(input_dim)
+        
+        # Main FFN blocks
+        self.up_proj = nn.Linear(input_dim, hidden_dim, bias=use_bias)
+        self.gate_proj = nn.Linear(input_dim, hidden_dim, bias=use_bias)
+        self.down_proj = nn.Linear(hidden_dim, output_dim, bias=use_bias)
+        
+        # Skip connection handling
+        if input_dim != output_dim:
+            self.skip_proj = nn.Linear(input_dim, output_dim, bias=use_bias)
+        else:
+            self.skip_proj = nn.Identity()
+        
+        self.dropout = nn.Dropout(dropout_rate)
+        
+        # Activation function
+        self.activation_type = activation
+        self.act_fn = self._get_activation(activation)
+        
+        self._init_weights()
+    
+    def _get_activation(self, activation: str):
+        """Get activation function"""
+        if activation == 'swiglu':
+            return nn.SiLU(inplace=True)
+        elif activation == 'geglu':
+            return nn.GELU()
+        elif activation == 'silu':
+            return nn.SiLU(inplace=True)
+        elif activation == 'gelu':
+            return nn.GELU()
+        else:
+            raise ValueError(f"Unknown activation: {activation}")
+    
+    def _init_weights(self):
+        """Initialize weights using modern practices"""
+        # Calculate fan_in and fan_out for proper scaling
+        fan_in = self.up_proj.in_features
+        fan_out = self.up_proj.out_features
+        
+        # Initialize projection matrices
+        for module in [self.up_proj, self.gate_proj]:
+            # Use scaled initialization for better gradient flow
+            std = math.sqrt(2.0 / fan_in)
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        
+        # Special initialization for output projection
+        hidden_dim = self.down_proj.in_features
+        output_dim = self.down_proj.out_features
+        std = math.sqrt(1.0 / hidden_dim)
+        nn.init.normal_(self.down_proj.weight, mean=0.0, std=std)
+        if self.down_proj.bias is not None:
+            nn.init.zeros_(self.down_proj.bias)
+        
+        # Initialize skip projection if needed
+        if isinstance(self.skip_proj, nn.Linear):
+            # Use Xavier uniform for skip connection
+            bound = math.sqrt(6.0 / (fan_in + fan_out))
+            nn.init.uniform_(self.skip_proj.weight, -bound, bound)
+            if self.skip_proj.bias is not None:
+                nn.init.zeros_(self.skip_proj.bias)
+        
+        # Initialize RMSNorm
+        nn.init.ones_(self.norm.weight)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass with gated activation and skip connection.
+        
+        Args:
+            x: Input tensor of shape (batch_size, seq_len, input_dim)
+            
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, seq_len, output_dim)
+        """
+        residual = self.skip_proj(x)
+        
+        # Pre-normalization
+        x = self.norm(x)
+        
+        # Gated activation
+        if self.activation_type in ['swiglu', 'geglu']:
+            gate = self.act_fn(self.gate_proj(x))
+            up = self.up_proj(x)
+            x = gate * up
+        else:
+            x = self.up_proj(x)
+            x = self.act_fn(x)
+        
+        # Project back to output dimension
+        x = self.down_proj(x)
+        
+        # Dropout and skip connection
+        x = self.dropout(x)
+        x = x + residual
+        
+        return x
+
+
+# Example usage:
+"""
+model = ModernFFN(
+    input_dim=768,
+    output_dim=512,
+    dropout_rate=0.1,
+    expansion_factor=4.0,
+    activation='swiglu',
+    use_bias=False
+)
+
+# Input shape: (batch_size, seq_len, input_dim)
+x = torch.randn(32, 128, 768)
+output = model(x)  # Shape: (32, 128, 512)
+"""
+
+
+def create_mlp(input_dim: int, 
+               hidden_dims: List[int], 
+               output_dim: int,
+               dropout_rate: float = 0.1,
+               negative_slope: float = 0.01,
+               use_skip_connections: bool = True) -> nn.Module:
+    """
+    Create a multi-layer perceptron with optional skip connections.
+    
+    Args:
+        input_dim (int): Input dimension
+        hidden_dims (List[int]): List of hidden layer dimensions
+        output_dim (int): Output dimension
+        dropout_rate (float): Dropout probability
+        negative_slope (float): Negative slope for LeakyReLU
+        use_skip_connections (bool): Whether to use skip connections
+        
+    Returns:
+        nn.Module: MLP model
+    """
+    layers = []
+    current_dim = input_dim
+    
+    # Add hidden layers
+    for hidden_dim in hidden_dims:
+        if use_skip_connections:
+            layers.append(
+                SkipConnectionFFNLayer(
+                    current_dim, 
+                    hidden_dim,
+                    dropout_rate=dropout_rate,
+                    negative_slope=negative_slope
+                )
+            )
+        else:
+            layers.append(
+                FFNLayer(
+                    current_dim, 
+                    hidden_dim,
+                    dropout_rate=dropout_rate,
+                    negative_slope=negative_slope
+                )
+            )
+        current_dim = hidden_dim
+    
+    # Add output layer
+    if use_skip_connections:
+        layers.append(
+            SkipConnectionFFNLayer(
+                current_dim, 
+                output_dim,
+                dropout_rate=dropout_rate,
+                negative_slope=negative_slope
+            )
+        )
+    else:
+        layers.append(
+            FFNLayer(
+                current_dim, 
+                output_dim,
+                dropout_rate=dropout_rate,
+                negative_slope=negative_slope
+            )
+        )
+    
+    return nn.Sequential(*layers)
+
+
+class ModernFFNWithoutSkip(nn.Module):
+    def __init__(
+        self, 
+        input_dim: int, 
+        output_dim: int, 
+        dropout_rate: float = 0.1,
+        expansion_factor: float = 4.0,
+        activation: str = 'swiglu',
+        use_bias: bool = False,
+        multiple_of: int = 256,
+        negative_slope: float = 0.01,  # Kept for backward compatibility
+    ):
+        """
+        Modern FFN without skip connections.
+        
+        Args: Same as ModernFFN, with negative_slope kept for compatibility
+        """
+        super().__init__()
+        
+        # Calculate hidden dimension
+        hidden_dim = int(input_dim * expansion_factor)
+        hidden_dim = multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of)
+        
+        # Pre-normalization
+        self.norm = RMSNorm(input_dim)
+        
+        # Main FFN blocks
+        self.up_proj = nn.Linear(input_dim, hidden_dim, bias=use_bias)
+        self.gate_proj = nn.Linear(input_dim, hidden_dim, bias=use_bias)
+        self.down_proj = nn.Linear(hidden_dim, output_dim, bias=use_bias)
+        
+        self.dropout = nn.Dropout(dropout_rate)
+        self.activation_type = activation
+        self.act_fn = self._get_activation(activation)
+        
+        self._init_weights()
+    
+    def _get_activation(self, activation: str):
+        return ModernFFN._get_activation(self, activation)
+    
+    def _init_weights(self):
+        """Initialize weights using modern practices"""
+        fan_in = self.up_proj.in_features
+        fan_out = self.up_proj.out_features
+        
+        for module in [self.up_proj, self.gate_proj]:
+            std = math.sqrt(2.0 / fan_in)
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        
+        std = math.sqrt(1.0 / hidden_dim)
+        nn.init.normal_(self.down_proj.weight, mean=0.0, std=std)
+        if self.down_proj.bias is not None:
+            nn.init.zeros_(self.down_proj.bias)
+        
+        nn.init.ones_(self.norm.weight)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.norm(x)
+        
+        if self.activation_type in ['swiglu', 'geglu']:
+            gate = self.act_fn(self.gate_proj(x))
+            up = self.up_proj(x)
+            x = gate * up
+        else:
+            x = self.up_proj(x)
+            x = self.act_fn(x)
+        
+        x = self.down_proj(x)
+        x = self.dropout(x)
+        return x
+
+
+def create_modern_mlp(
+    input_dim: int,
+    hidden_dims: List[int],
+    output_dim: int,
+    dropout_rate: float = 0.1,
+    negative_slope: float = 0.01,  # Kept for backward compatibility
+    use_skip_connections: bool = True,
+    activation: str = 'swiglu',
+    expansion_factor: float = 4.0,
+    use_bias: bool = True,
+    multiple_of: int = 256
+) -> nn.Module:
+    """
+    Create a modern multi-layer perceptron with optional skip connections.
+    
+    Args:
+        input_dim (int): Input dimension
+        hidden_dims (List[int]): List of hidden layer dimensions
+        output_dim (int): Output dimension
+        dropout_rate (float): Dropout probability
+        negative_slope (float): Kept for backward compatibility
+        use_skip_connections (bool): Whether to use skip connections
+        activation (str): Activation type ('swiglu', 'geglu', 'gelu', 'silu')
+        expansion_factor (float): Hidden layer expansion factor
+        use_bias (bool): Whether to use bias in linear layers
+        multiple_of (int): Ensure hidden dimensions are multiples of this
+        
+    Returns:
+        nn.Module: Modern MLP model
+    """
+    layers = []
+    current_dim = input_dim
+    
+    FFNClass = ModernFFN if use_skip_connections else ModernFFNWithoutSkip
+    
+    # Add hidden layers
+    for hidden_dim in hidden_dims:
+        layers.append(
+            FFNClass(
+                input_dim=current_dim,
+                output_dim=hidden_dim,
+                dropout_rate=dropout_rate,
+                expansion_factor=expansion_factor,
+                activation=activation,
+                use_bias=use_bias,
+                multiple_of=multiple_of,
+                # negative_slope=negative_slope  # Kept for compatibility
+            )
+        )
+        current_dim = hidden_dim
+    
+    # Add output layer
+    layers.append(
+        FFNClass(
+            input_dim=current_dim,
+            output_dim=output_dim,
+            dropout_rate=dropout_rate,
+            expansion_factor=expansion_factor,
+            activation=activation,
+            use_bias=use_bias,
+            multiple_of=multiple_of,
+            # negative_slope=negative_slope  # Kept for compatibility
+        )
+    )
+    
+    return nn.Sequential(*layers)
+
+
+# Example usage:
+"""
+model = create_modern_mlp(
+    input_dim=768,
+    hidden_dims=[512, 256],
+    output_dim=128,
+    dropout_rate=0.1,
+    use_skip_connections=True,
+    activation='swiglu',
+    expansion_factor=4.0,
+    use_bias=False
+)
+
+# Input shape: (batch_size, seq_len, input_dim)
+x = torch.randn(32, 128, 768)
+output = model(x)  # Shape: (32, 128, 128)
+"""
+
+
+
 
 def create_save_directory(base_dir='saved_models'):
     """  
@@ -88,6 +588,7 @@ def eye_like(tensor):
     return torch.eye(*tensor.size(), out=torch.empty_like(tensor))
 
 def matching_preserving_loss(original_embeddings, quantized_embeddings):
+    return 0.0
     original_embeddings_normalized = F.normalize(original_embeddings, dim=1)
     quantized_embeddings_normalized = F.normalize(quantized_embeddings, dim=1)
     cosine_similarities = torch.matmul(original_embeddings_normalized, quantized_embeddings_normalized.t())

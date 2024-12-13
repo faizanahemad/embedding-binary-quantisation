@@ -7,7 +7,7 @@ import numpy as np
 from typing import List  
 from tqdm import tqdm  
 from config import *  
-from common import similarity_preservation_loss, SentenceTransformerEmbeddingCaller, OriginalEmbeddingCaller, ModelCardData
+from common import create_mlp, create_modern_mlp, rank_preserving_loss, similarity_preservation_loss, SentenceTransformerEmbeddingCaller, OriginalEmbeddingCaller, ModelCardData, contrastive_loss
   
 class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):  
     """  
@@ -182,20 +182,29 @@ class MatryoshkaTransformer(nn.Module):
         if input_dim > self.dimension_levels[-1]:  
             self.dimension_levels.append(input_dim)  
   
-        self.base_transform = nn.Sequential(  
-             
-            nn.Linear(input_dim, input_dim * 2),  
-            nn.LeakyReLU(),  
-            nn.LayerNorm(input_dim * 2),  
-            nn.Dropout(0.1),
-            nn.Linear(input_dim * 2, input_dim * 2),   
-            nn.LeakyReLU(),  
-        )  
+        
+        
+        self.base_transform = create_modern_mlp(
+            input_dim=input_dim,
+            hidden_dims=[input_dim * 2, input_dim * 2],
+            output_dim=input_dim * 2,
+            dropout_rate=0.1,
+            negative_slope=0.01,
+            use_skip_connections=True
+        )
   
         for dim in self.dimension_levels:  
-            block = nn.Sequential(  
-                nn.Linear(input_dim * 2, dim - prev_dim)  
-            )  
+            
+            
+            block = create_modern_mlp(
+                input_dim=input_dim * 2,
+                hidden_dims=[input_dim * 2, input_dim],
+                output_dim=dim - prev_dim,
+                dropout_rate=0.1,
+                negative_slope=0.01,
+                use_skip_connections=True
+            )
+
             self.blocks.append(block)  
   
             # Add quantization layer for this dimension level  
@@ -507,7 +516,7 @@ def multi_scale_contrastive_loss(embeddings_dict: dict,
         similarity_matrix = similarity_matrix.masked_fill(mask, -9e15)  
   
         # Compute loss  
-        loss = F.cross_entropy(similarity_matrix / temperature, labels)  
+        loss = F.cross_entropy(similarity_matrix / temperature, labels, reduction='mean')  
         total_loss += weights[dim] * loss  
     return total_loss  
   
@@ -618,28 +627,32 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
   
     # Collect sample embeddings for threshold initialization  
     sample_embeddings_list = []  
-    with torch.no_grad():  
-        for batch in tqdm(dataloader, desc="Collecting sample embeddings", total=len(dataloader)):  
-            input_ids = batch['input_ids'].squeeze(1).to(device)  
-            attention_mask = batch['attention_mask'].squeeze(1).to(device)  
-            embeddings = matryoshka_model.embedding_model(  
-                input_ids=input_ids,  
-                attention_mask=attention_mask,  
-            )
-            # convert to tensor if not already
-            embeddings = torch.tensor(embeddings)
-            embeddings = F.normalize(embeddings, p=2, dim=1)  
-            sample_embeddings_list.append(embeddings)  
-            if len(sample_embeddings_list) >= 10:  
-                break  
-        sample_embeddings = torch.cat(sample_embeddings_list, dim=0)  
+    if matryoshka_model.train_binary or matryoshka_model.train_two_bit:
+        with torch.no_grad():  
+            for batch in tqdm(dataloader, desc="Collecting sample embeddings", total=len(dataloader)):  
+                input_ids = batch['input_ids'].squeeze(1).to(device)  
+                attention_mask = batch['attention_mask'].squeeze(1).to(device)  
+                embeddings = matryoshka_model.embedding_model(  
+                    input_ids=input_ids,  
+                    attention_mask=attention_mask,  
+                )
+                # convert to tensor if not already
+                embeddings = torch.tensor(embeddings)
+                embeddings = F.normalize(embeddings, p=2, dim=1)  
+                sample_embeddings_list.append(embeddings)  
+                if len(sample_embeddings_list) >= 100:  
+                    break  
+            sample_embeddings = torch.cat(sample_embeddings_list, dim=0)  
+    
+        # Initialize thresholds in quantization layers  
+        matryoshka_model.init_thresholds(sample_embeddings)  
   
-    # Initialize thresholds in quantization layers  
-    matryoshka_model.init_thresholds(sample_embeddings)  
-  
+    
     for epoch in range(num_epochs):  
         total_loss = 0.0  
-        for batch in tqdm(dataloader, desc=f'Epoch {epoch+1}/{num_epochs}'):  
+        loss_dict = {}
+        pbar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{num_epochs}')
+        for batch in pbar:  
             input_ids = batch['input_ids'].squeeze(1).to(device)  
             attention_mask = batch['attention_mask'].squeeze(1).to(device)  
             with torch.no_grad():  
@@ -655,25 +668,39 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
             embeddings_dict = matryoshka_model.transformer(embeddings)  
             batch_size = embeddings.size(0)  
             positive_pairs = torch.arange(0, batch_size, device=device).view(-1, 2)  
-            # Compute losses  
-            loss_contrastive = multi_scale_contrastive_loss(  
-                embeddings_dict, positive_pairs, temperature=temperature  
-            )  
-            loss_ortho = orthogonality_regularization(embeddings_dict)  
-            loss_info_bottleneck = information_bottleneck_regularization(embeddings_dict)  
+            # Compute losses 
+            # loss_contrastive = multi_scale_contrastive_loss(  
+            #     embeddings_dict, positive_pairs, temperature=temperature  
+            # )  
+            # loss_dict['contrastive'] = loss_contrastive.item()
+            loss_ortho = 0.01 * orthogonality_regularization(embeddings_dict)  
+            loss_dict['ortho'] = loss_ortho.item()
+            loss_info_bottleneck = 0.1 * information_bottleneck_regularization(embeddings_dict)  
+            loss_dict['info_bottleneck'] = loss_info_bottleneck.item()
             loss_similarity = 0.0  
+            overall_contrastive_loss = 0.0
             dimension_levels = sorted(embeddings_dict.keys())  
+            overall_rank_loss = 0.0
             for dim, emb in embeddings_dict.items():  
                 weight = 1.0 / (dim / min(dimension_levels))  
                 loss_similarity += weight * similarity_preservation_loss(embeddings, emb)  
-            loss = loss_contrastive + reg_strength * (loss_ortho + loss_info_bottleneck) + loss_similarity  
+                contrastive_loss_per_dim = weight * contrastive_loss(embeddings)
+                overall_contrastive_loss += contrastive_loss_per_dim
+                overall_rank_loss += weight * rank_preserving_loss(embeddings, emb)
+            loss = overall_contrastive_loss + reg_strength * (loss_ortho + loss_info_bottleneck) + loss_similarity + overall_rank_loss  
+            loss_dict['similarity'] = loss_similarity.item()
+            loss_dict['total'] = loss.item()
+            loss_dict['contrastive'] = overall_contrastive_loss.item()
+            loss_dict['rank'] = overall_rank_loss.item()
             # If training for quantization, add quantization regularization loss  
             if matryoshka_model.train_binary or matryoshka_model.train_two_bit:  
                 quantization_bits = 2 if matryoshka_model.train_two_bit else 1  
                 loss_quantization = quantization_regularization_loss(  
                     embeddings_dict, quantization_bits, epoch, num_epochs  
                 )  
+                loss_dict['quantization'] = loss_quantization.item()
                 loss += reg_strength * loss_quantization  
+                
                 # Anneal temperatures in quantization layers  
                 for quant_layer in matryoshka_model.transformer.quantization_layers.values():  
                     quant_layer.anneal_temperature(epoch, num_epochs)  
@@ -684,6 +711,8 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
             optimizer.step()  
             scheduler.step()  
             total_loss += loss.item()  
+            pbar.set_postfix(loss_dict)
         avg_loss = total_loss / len(dataloader)  
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}')  
+        loss_dict['avg_loss'] = avg_loss
     return matryoshka_model

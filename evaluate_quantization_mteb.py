@@ -32,7 +32,7 @@ from mteb.abstasks.AbsTask import AbsTask
 from mteb.models.wrapper import Wrapper
 from mteb.encoder_interface import Encoder
 from MatryoshkaModel.matryoshka_2bit_model import MatryoshkaEmbeddingModel
-from config import base_model_name, need_baselines
+from config import base_model_name, need_baselines, binary_baseline
 
 from typing import List, Dict  
 import pandas as pd  
@@ -223,6 +223,8 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
             results_dir=results_dir
         )
         task_results['Original'] = results_original
+        
+    if binary_baseline:
 
         # 2. Original Binary
         print("  Evaluating Original Binary...")
@@ -379,14 +381,14 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         task_results['OneBitTwoBit_Trained'] = results_one_bit_two_bit
         
     if 'Matryoshka' in test_modules:
-        print(f"[DEBUG] Evaluating Matryoshka Trained...")
+        # print(f"[DEBUG] Evaluating Matryoshka Trained...")
         # 7. Matryoshka Trained
         embedding_model_name = base_model_name
         embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
         print("  Evaluating Matryoshka Trained...")
         matryoshka_model = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim//16, embedding_dim//8, embedding_dim//4, embedding_dim//2, embedding_dim], train_binary=False, train_two_bit=False, expand_two_bit_to_three_bits=False)
         matryoshka_model.load(f'saved_models/{save_dirs[5]}/matryoshka_model.pth')
-        print(f"[DEBUG] Loaded model: {matryoshka_model} with class {type(matryoshka_model)}")
+        # print(f"[DEBUG] Loaded model: {matryoshka_model} with class {type(matryoshka_model)}")
         results_matryoshka = evaluate_model_on_tasks(
             model=matryoshka_model,
             tasks=[task],
