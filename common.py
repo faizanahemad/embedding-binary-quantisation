@@ -685,7 +685,7 @@ def contrastive_loss(embeddings, temperature=0.05):
 
 def get_dataloader(base_model_name, batch_size, num_workers=4, persistent_workers=True, prefetch_factor=2):
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
-    dataset = CombinedSimilarityDataset(tokenizer, max_length=384, max_samples_per_dataset=10000)
+    dataset = CombinedSimilarityDataset(tokenizer, max_length=256, max_samples_per_dataset=10000)
     print(f"Train Dataset size: {len(dataset)}")
     # Create a sampler that keeps pairs together while shuffling between pairs
     indices = list(range(0, len(dataset), 2))  # Get indices of first element of each pair

@@ -16,7 +16,7 @@ class CombinedSimilarityDataset(Dataset):
     Positive pairs (e.g., query-passage) are placed consecutively.  
     """  
   
-    def __init__(self, tokenizer, max_length=128, max_samples_per_dataset=None):  
+    def __init__(self, tokenizer, max_length=256, max_samples_per_dataset=None):  
         """  
         Initializes the dataset by loading and combining multiple datasets.  
   

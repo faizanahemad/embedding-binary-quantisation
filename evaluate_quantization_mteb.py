@@ -386,7 +386,7 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         embedding_model_name = base_model_name
         embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
         print("  Evaluating Matryoshka Trained...")
-        matryoshka_model = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim//16, embedding_dim//8, embedding_dim//4, embedding_dim//2, embedding_dim], train_binary=False, train_two_bit=False, expand_two_bit_to_three_bits=False)
+        matryoshka_model = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim//8, embedding_dim//4, embedding_dim//2, embedding_dim], train_binary=False, train_two_bit=False, expand_two_bit_to_three_bits=False)
         matryoshka_model.load(f'saved_models/{save_dirs[5]}/matryoshka_model.pth')
         # print(f"[DEBUG] Loaded model: {matryoshka_model} with class {type(matryoshka_model)}")
         results_matryoshka = evaluate_model_on_tasks(
