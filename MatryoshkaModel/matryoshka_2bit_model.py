@@ -7,7 +7,7 @@ import numpy as np
 from typing import List  
 from tqdm import tqdm  
 from config import *  
-from common import similarity_preservation_loss, SentenceTransformerEmbeddingCaller, OriginalEmbeddingCaller  
+from common import similarity_preservation_loss, SentenceTransformerEmbeddingCaller, OriginalEmbeddingCaller, ModelCardData
   
 class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):  
     """  
@@ -42,7 +42,16 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
         
         self.train_binary = train_binary  
         self.train_two_bit = train_two_bit  
-        self.expand_two_bit_to_three_bits = expand_two_bit_to_three_bits  
+        self.expand_two_bit_to_three_bits = expand_two_bit_to_three_bits
+        self.model_card_data = {
+            "name": "MatryoshkaEmbeddingModel",
+            "base_model": self.embedding_model.model_name,
+            "base_model_revision": None,
+            "language": ["en"],
+            "similarity_fn_name": "cos_sim",
+            "revision": "1.0.0",
+        }
+        self.mteb_model_meta = ModelCardData(**self.model_card_data)
         
   
         
@@ -63,7 +72,7 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
         torch.save(self.transformer.state_dict(), path)
         
     def load(self, path: str):
-        self.transformer.load_state_dict(torch.load(path))
+        self.transformer.load_state_dict(torch.load(path, map_location=torch.device('cpu') if not torch.cuda.is_available() else torch.device('cuda')))
   
     def init_thresholds(self, sample_embeddings: torch.Tensor):  
         """  
@@ -95,7 +104,7 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
         Returns:  
             np.ndarray: Embeddings of shape (num_sentences, output_dim)  
         """  
-        print(output_dim)
+
         if output_dim is None:  
             output_dim = self.max_dim  
         assert output_dim in self.dimension_levels, f"Output dimension must be one of {self.dimension_levels}"  
@@ -135,7 +144,7 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
             # Normalize embeddings  
             embeddings = F.normalize(embeddings, p=2, dim=1)  
         assert embeddings.shape[1] == matryoshka_output_dim, f"Output dimension {embeddings.shape[1]} does not match desired output dimension {matryoshka_output_dim}"
-        print(embeddings.shape)
+
         return embeddings.cpu().numpy()  
   
 class MatryoshkaTransformer(nn.Module):  

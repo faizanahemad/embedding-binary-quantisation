@@ -6,6 +6,8 @@ batch_size = 1024
 lr = 0.0001
 max_grad_norm = 1.0
 
+need_baselines = False
+
 init_std = 0.001
 
 matryoshka_output_dim = 384//8

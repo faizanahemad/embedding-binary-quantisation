@@ -32,7 +32,7 @@ from mteb.abstasks.AbsTask import AbsTask
 from mteb.models.wrapper import Wrapper
 from mteb.encoder_interface import Encoder
 from MatryoshkaModel.matryoshka_2bit_model import MatryoshkaEmbeddingModel
-from config import base_model_name
+from config import base_model_name, need_baselines
 
 from typing import List, Dict  
 import pandas as pd  
@@ -209,45 +209,47 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         embedding_dim = embedding_model.get_sentence_embedding_dimension()
     except:
         embedding_dim = embedding_model.config.hidden_size
-    
-    # 1. Original Model
-    print("  Evaluating Original Model...")
-    original_model = OriginalEmbeddingModel(model_name)
-    # print(f"[DEBUG] Created model type: {type(original_model)}")  # Add this debug print
-    results_original = evaluate_model_on_tasks(
-        model=original_model,
-        tasks=[task],
-        model_name='Original',
-        results_dir=results_dir
-    )
-    task_results['Original'] = results_original
-    
-    # 2. Original Binary
-    print("  Evaluating Original Binary...")
-    original_model_binary = OriginalEmbeddingModelBinary(model_name)
-    results_original_binary = evaluate_model_on_tasks(
-        model=original_model_binary,
-        tasks=[task],
-        model_name='OriginalBinary',
-        results_dir=results_dir
-    )
-    task_results['OriginalBinary'] = results_original_binary
 
-    # 2. Stage1 Untrained
-    print("  Evaluating Stage1 Untrained...")
-    quantization_module_stage1_zero = QuantizationModuleStage1(embedding_dim)
-    quantization_module_stage1_zero.thresholds.data.fill_(0.0)
-    quantized_model_stage1_zero = QuantizedEmbeddingModel(
-        embedding_model=embedding_model,
-        quantization_module=quantization_module_stage1_zero
-    )
-    results_stage1_zero = evaluate_model_on_tasks(
-        model=quantized_model_stage1_zero,
-        tasks=[task],
-        model_name='QuantStage1_Untrained',
-        results_dir=results_dir
-    )
-    task_results['QuantStage1_Untrained'] = results_stage1_zero
+    if need_baselines:
+    
+        # 1. Original Model
+        print("  Evaluating Original Model...")
+        original_model = OriginalEmbeddingModel(model_name)
+        # print(f"[DEBUG] Created model type: {type(original_model)}")  # Add this debug print
+        results_original = evaluate_model_on_tasks(
+            model=original_model,
+            tasks=[task],
+            model_name='Original',
+            results_dir=results_dir
+        )
+        task_results['Original'] = results_original
+
+        # 2. Original Binary
+        print("  Evaluating Original Binary...")
+        original_model_binary = OriginalEmbeddingModelBinary(model_name)
+        results_original_binary = evaluate_model_on_tasks(
+            model=original_model_binary,
+            tasks=[task],
+            model_name='OriginalBinary',
+            results_dir=results_dir
+        )
+        task_results['OriginalBinary'] = results_original_binary
+
+        # 2. Stage1 Untrained
+        print("  Evaluating Stage1 Untrained...")
+        quantization_module_stage1_zero = QuantizationModuleStage1(embedding_dim)
+        quantization_module_stage1_zero.thresholds.data.fill_(0.0)
+        quantized_model_stage1_zero = QuantizedEmbeddingModel(
+            embedding_model=embedding_model,
+            quantization_module=quantization_module_stage1_zero
+        )
+        results_stage1_zero = evaluate_model_on_tasks(
+            model=quantized_model_stage1_zero,
+            tasks=[task],
+            model_name='QuantStage1_Untrained',
+            results_dir=results_dir
+        )
+        task_results['QuantStage1_Untrained'] = results_stage1_zero
     
     if 'stage1' in test_modules:
         # 3. Stage1 Trained

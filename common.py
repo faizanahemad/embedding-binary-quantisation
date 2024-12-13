@@ -12,9 +12,26 @@ from dataset import CombinedSimilarityDataset
 
 
 import os  
-from datetime import datetime  
-  
-def create_save_directory(base_dir='saved_models'):  
+from datetime import datetime
+
+from dataclasses import dataclass, asdict
+@dataclass
+class ModelCardData:
+    name: str
+    base_model: str
+    base_model_revision: str | None
+    language: list[str]
+    similarity_fn_name: str
+    revision: str
+
+
+    def model_name_as_path(self) -> str:
+        return self.name
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+def create_save_directory(base_dir='saved_models'):
     """  
     Creates a directory named 'run_{date_time}' inside the base directory.  
   
@@ -200,12 +217,14 @@ class OriginalEmbeddingModel(Wrapper, Encoder):
         self.model = SentenceTransformer(model_name)  
         self.model.to(device)
         self.model_card_data = {
-            "model_name": model_name,
+            "name": model_name,
             "base_model": model_name,
             "base_model_revision": None,
             "language": ["en"],
-            "similarity_fn_name": "cos_sim"
+            "similarity_fn_name": "cos_sim",
+            "revision": "1.0.0",
         }
+        self.mteb_model_meta = ModelCardData(**self.model_card_data)
         # print("[INIT] Finished creating OriginalEmbeddingModel\n")
         
     def __call__(self, *args, **kwargs):
@@ -256,12 +275,14 @@ class OriginalEmbeddingModelBinary(Wrapper, Encoder):
         self.model = SentenceTransformer(model_name)  
         self.model.to(device)
         self.model_card_data = {
-            "model_name": model_name,
+            "name": model_name,
             "base_model": model_name,
             "base_model_revision": None,
             "language": ["en"],
-            "similarity_fn_name": "cos_sim"
+            "similarity_fn_name": "cos_sim",
+            "revision": "1.0.0",
         }
+        self.mteb_model_meta = ModelCardData(**self.model_card_data)
         # print("[INIT] Finished creating OriginalEmbeddingModel\n")
         
     def __call__(self, *args, **kwargs):
@@ -315,14 +336,14 @@ class QuantizedEmbeddingModel(Wrapper, Encoder):
         self.quantization_module = quantization_module
         self.quantization_module.to(device)  # Move quantization module to GPU
         self.model_card_data = {
-            "model_name": quantization_module.__class__.__name__,
+            "name": quantization_module.__class__.__name__,
             "base_model": quantization_module.__class__.__name__,
             "base_model_revision": None,
             "language": ["en"],
             "similarity_fn_name": "cos_sim",
-            "license": "apache-2.0",
-            "pipeline_tag": "sentence-similarity"
+            "revision": "1.0.0",
         }
+        self.mteb_model_meta = ModelCardData(**self.model_card_data)
 
   
     def encode(self, sentences: List[str], **kwargs) -> np.ndarray:  
