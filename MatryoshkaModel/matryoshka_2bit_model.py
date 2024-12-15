@@ -214,14 +214,22 @@ class MatryoshkaTransformer(nn.Module):
             #     use_skip_connections=True
             # )
             
-            block = nn.Sequential(nn.Linear(input_dim, input_dim*8), nn.Linear(input_dim*8, dim - prev_dim))
+            block = nn.Sequential(nn.Linear(input_dim, input_dim*8), nn.LayerNorm(input_dim*8), nn.LeakyReLU(), nn.Linear(input_dim*8, input_dim*8), nn.LayerNorm(input_dim*8), nn.LeakyReLU(), nn.Linear(input_dim*8, dim - prev_dim))
             # block = nn.Linear(input_dim, dim - prev_dim)
             
             # init block
             nn.init.kaiming_normal_(block[0].weight)
-            nn.init.kaiming_normal_(block[1].weight)
+            nn.init.kaiming_normal_(block[3].weight) 
+            nn.init.kaiming_normal_(block[6].weight)
             nn.init.constant_(block[0].bias, 0)
+            nn.init.constant_(block[3].bias, 0)
+            nn.init.constant_(block[6].bias, 0)
+            
+            # init layer norm
+            nn.init.constant_(block[1].weight, 1)
+            nn.init.constant_(block[4].weight, 1)
             nn.init.constant_(block[1].bias, 0)
+            nn.init.constant_(block[4].bias, 0)
 
             self.blocks.append(block)  
   

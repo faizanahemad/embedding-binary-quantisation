@@ -46,7 +46,7 @@ save_dirs = [
     'run_20241201_1800', 
     '__', 
     'run_20241202_1422', 
-    'run_20241215_0457', 
+    'run_20241215_0600', 
 ]
 
 # Thresholds are not changing with training for OneBitTwoBit
