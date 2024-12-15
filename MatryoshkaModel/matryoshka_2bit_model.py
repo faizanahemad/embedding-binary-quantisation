@@ -1,3 +1,4 @@
+from ast import For
 import torch  
 import torch.nn as nn  
 import torch.nn.functional as F  
@@ -7,7 +8,7 @@ import numpy as np
 from typing import List  
 from tqdm import tqdm  
 from config import *  
-from common import create_mlp, create_modern_mlp, rank_preserving_loss, similarity_preservation_loss, SentenceTransformerEmbeddingCaller, OriginalEmbeddingCaller, ModelCardData, contrastive_loss
+from common import create_mlp, create_modern_mlp, kl_similarity_preservation_loss, rank_preserving_loss, similarity_preservation_loss, SentenceTransformerEmbeddingCaller, OriginalEmbeddingCaller, ModelCardData, contrastive_loss
   
 class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):  
     """  
@@ -67,6 +68,7 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
             expand_two_bit_to_three_bits=self.expand_two_bit_to_three_bits  
         )  
         self.max_dim = self.embedding_dim
+        self.baseline = False
         
     def save(self, path: str):
         torch.save(self.transformer.state_dict(), path)
@@ -125,14 +127,19 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
             base_embeddings = torch.tensor(base_embeddings)  
   
         # Pass through the transformation network  
-        self.transformer.eval()  
-        with torch.no_grad():  
-            matryoshka_embeddings = self.transformer(  
-                base_embeddings,  
-                apply_binary=do_binary,  
-                apply_two_bit=do_two_bits  
-            )  
-            embeddings = matryoshka_embeddings[output_dim]  
+        baseline_embeddings = base_embeddings[:,:output_dim]
+        if self.baseline:
+            embeddings = baseline_embeddings
+        else:
+            self.transformer.eval()  
+            with torch.no_grad():  
+                matryoshka_embeddings = self.transformer(  
+                    base_embeddings,  
+                    apply_binary=do_binary,  
+                    apply_two_bit=do_two_bits  
+                )  
+                embeddings = matryoshka_embeddings[output_dim]  
+            assert not torch.allclose(embeddings, baseline_embeddings, rtol=1e-3, atol=1e-5), "Transformed embeddings should be different from baseline embeddings"
   
         # If binary mode, convert embeddings to binary  
         if do_binary:  
@@ -186,8 +193,8 @@ class MatryoshkaTransformer(nn.Module):
         
         self.base_transform = create_modern_mlp(
             input_dim=input_dim,
-            hidden_dims=[input_dim * 2, input_dim * 2],
-            output_dim=input_dim * 2,
+            hidden_dims=[input_dim * 4, input_dim * 4],
+            output_dim=input_dim * 4,
             dropout_rate=0.1,
             negative_slope=0.01,
             use_skip_connections=True
@@ -197,8 +204,8 @@ class MatryoshkaTransformer(nn.Module):
             
             
             block = create_modern_mlp(
-                input_dim=input_dim * 2,
-                hidden_dims=[input_dim * 2, input_dim],
+                input_dim=input_dim * 4,
+                hidden_dims=[input_dim * 4, input_dim * 2],
                 output_dim=dim - prev_dim,
                 dropout_rate=0.1,
                 negative_slope=0.01,
@@ -552,6 +559,43 @@ def quantization_regularization_loss(embeddings_dict: dict,
             mse_loss = F.mse_loss(emb, levels)  
             reg_loss += weight * mse_loss  
     return reg_loss  
+
+
+def kl_divergence(embeddings_original: torch.Tensor, embeddings_new: torch.Tensor) -> torch.Tensor:
+    """
+    Compute symmetric KL divergence (Jensen-Shannon Divergence) between original and new embeddings.
+    
+    Args:
+        embeddings_original (torch.Tensor): Original embeddings
+        embeddings_new (torch.Tensor): New embeddings
+        
+    Returns:
+        torch.Tensor: Mean JSD value
+    """
+    # Convert embeddings to probability distributions using softmax
+    prob_original = F.softmax(embeddings_original, dim=-1)
+    prob_new = F.softmax(embeddings_new, dim=-1)
+    
+    # Compute KL divergence in both directions
+    # Note: kl_div expects log probabilities as first argument
+    kl_div = F.kl_div(
+        prob_original.log(), 
+        prob_new,
+        reduction='batchmean',
+        log_target=False
+    )
+    
+    kl_div_2 = F.kl_div(
+        prob_new.log(),
+        prob_original,
+        reduction='batchmean',
+        log_target=False
+    )
+    
+    # Compute Jensen-Shannon Divergence
+    jsd = 0.5 * (kl_div + kl_div_2)
+    
+    return jsd
   
 def orthogonality_regularization(embeddings_dict: dict) -> torch.Tensor:  
     """  
@@ -621,7 +665,7 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
     matryoshka_model.embedding_model.to(device)  
     optimizer = torch.optim.Adam(matryoshka_model.transformer.parameters(), lr=learning_rate)  
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=learning_rate,  
-                                                    epochs=num_epochs, steps_per_epoch=len(dataloader))  
+                                                    epochs=num_epochs, steps_per_epoch=len(dataloader), final_div_factor=100)  
     matryoshka_model.embedding_model.eval()  
     matryoshka_model.transformer.train()  
   
@@ -678,17 +722,28 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
             loss_info_bottleneck = 0.1 * information_bottleneck_regularization(embeddings_dict)  
             loss_dict['info_bottleneck'] = loss_info_bottleneck.item()
             loss_similarity = 0.0  
+            loss_kl_similarity = 0.0
             overall_contrastive_loss = 0.0
             dimension_levels = sorted(embeddings_dict.keys())  
             overall_rank_loss = 0.0
+            scale_factor = (max(dimension_levels) / min(dimension_levels)) / np.sqrt(max(dimension_levels))
             for dim, emb in embeddings_dict.items():  
-                weight = 1.0 / (dim / min(dimension_levels))  
-                loss_similarity += weight * similarity_preservation_loss(embeddings, emb)  
-                contrastive_loss_per_dim = weight * contrastive_loss(embeddings)
+                weight_small_dim = 1.0 / (dim / min(dimension_levels))  
+                weight_large_dim = scale_factor * np.sqrt(dim)
+                loss_similarity += weight_large_dim * similarity_preservation_loss(embeddings, emb)  
+                loss_kl_similarity += weight_large_dim * kl_similarity_preservation_loss(embeddings, emb)
+                contrastive_loss_per_dim = weight_large_dim * contrastive_loss(embeddings)
                 overall_contrastive_loss += contrastive_loss_per_dim
-                overall_rank_loss += weight * rank_preserving_loss(embeddings, emb)
-            loss = overall_contrastive_loss + reg_strength * (loss_ortho + loss_info_bottleneck) + loss_similarity + overall_rank_loss  
+                overall_rank_loss += weight_large_dim * rank_preserving_loss(embeddings, emb)
+                
+            highest_dim = max(dimension_levels)
+            embeddings_new = embeddings_dict[highest_dim]
+            embeddings_original = embeddings
+            # loss_kl = kl_divergence(embeddings_original, embeddings_new)
+            # loss_dict['kl'] = loss_kl.item()
+            loss = loss_similarity + loss_kl_similarity + overall_rank_loss # + 0.1 * overall_contrastive_loss # + reg_strength * loss_ortho + reg_strength * loss_info_bottleneck + # + loss_kl
             loss_dict['similarity'] = loss_similarity.item()
+            loss_dict['kl_similarity'] = loss_kl_similarity.item()
             loss_dict['total'] = loss.item()
             loss_dict['contrastive'] = overall_contrastive_loss.item()
             loss_dict['rank'] = overall_rank_loss.item()

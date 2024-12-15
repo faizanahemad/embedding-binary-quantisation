@@ -1,17 +1,19 @@
 base_model_name = "jinaai/jina-embeddings-v3"# "", "sentence-transformers/all-MiniLM-L12-v2"
 base_model_name = "sentence-transformers/all-MiniLM-L12-v2"
-reg_strength = 0.1
+reg_strength = 0.01
 num_epochs = 30
 batch_size = 512
-lr = 0.01
-max_grad_norm = 2.0
+lr = 0.001
+max_grad_norm = 5.0
+
+max_samples_per_dataset = 1000
 
 need_baselines = True
 binary_baseline = False
 
-init_std = 0.001
+init_std = 0.01
 
-matryoshka_output_dim = 384//1
+matryoshka_output_dim = 384//2
 
 temperature = 10 # 10 best
 
@@ -44,7 +46,7 @@ save_dirs = [
     'run_20241201_1800', 
     '__', 
     'run_20241202_1422', 
-    'run_20241213_1754', 
+    'run_20241214_1754', 
 ]
 
 # Thresholds are not changing with training for OneBitTwoBit

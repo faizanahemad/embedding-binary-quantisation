@@ -276,7 +276,7 @@ class CombinedSimilarityDataset(Dataset):
                 'loader_function': self.load_wikisum
             }
         ]  
-        overall_dataset_path = self.cache_dir / "overall_dataset_for_quantization"
+        overall_dataset_path = self.cache_dir / f"overall_dataset_for_quantization_{self.max_samples_per_dataset}"
         if os.path.exists(overall_dataset_path):
             dataset = load_from_disk(overall_dataset_path)
             self.samples = [tuple(example.values()) for example in dataset]

@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, temperature
+from config import base_model_name, reg_strength, num_epochs, batch_size, temperature, max_samples_per_dataset
 
 from dataset import CombinedSimilarityDataset
 from typing import List
@@ -419,6 +419,8 @@ class ModernFFNWithoutSkip(nn.Module):
             if module.bias is not None:
                 nn.init.zeros_(module.bias)
         
+        hidden_dim = self.down_proj.in_features
+        output_dim = self.down_proj.out_features
         std = math.sqrt(1.0 / hidden_dim)
         nn.init.normal_(self.down_proj.weight, mean=0.0, std=std)
         if self.down_proj.bias is not None:
@@ -572,8 +574,10 @@ def similarity_preservation_loss(original_embeddings, quantized_embeddings):
         loss (torch.Tensor): Scalar loss value  
     """  
     # Normalize embeddings  
-    original_norm = F.normalize(original_embeddings, dim=1)  
-    quantized_norm = F.normalize(quantized_embeddings, dim=1)  
+    # original_norm = F.normalize(original_embeddings, dim=1)  
+    # quantized_norm = F.normalize(quantized_embeddings, dim=1)  
+    original_norm = original_embeddings
+    quantized_norm = quantized_embeddings
   
     # Compute similarity matrices  
     sim_original = torch.matmul(original_norm, original_norm.t())  # Shape: (batch_size, batch_size)  
@@ -583,6 +587,62 @@ def similarity_preservation_loss(original_embeddings, quantized_embeddings):
     loss = F.mse_loss(sim_quantized, sim_original)  
   
     return loss  
+
+
+def kl_similarity_preservation_loss(original_embeddings, quantized_embeddings, eps=1e-8, temperature=0.1):
+    """
+    Compute similarity preservation loss using average of two KL divergences.
+    Compute similarity preservation loss using Jensen-Shannon Divergence (JSD).
+    JSD is symmetric and bounded, making it a better choice than KL divergence alone.
+    Uses softmax with temperature scaling for proper probability distributions.
+    
+    Args:
+        original_embeddings (torch.Tensor): Original embeddings, shape (batch_size, embedding_dim)
+        quantized_embeddings (torch.Tensor): Quantized embeddings, shape (batch_size, embedding_dim_new)
+        temperature (float): Temperature for scaling similarities (lower = sharper)
+        eps (float): Small constant for numerical stability
+        
+    Returns:
+        loss (torch.Tensor): Scalar loss value representing mean symmetric KL
+    """
+    # Normalize embeddings
+    # original_norm = F.normalize(original_embeddings, dim=1)
+    # quantized_norm = F.normalize(quantized_embeddings, dim=1)
+    original_norm = original_embeddings
+    quantized_norm = quantized_embeddings
+    
+    
+    # Compute similarity matrices
+    sim_original = torch.matmul(original_norm, original_norm.t()) / temperature
+    sim_quantized = torch.matmul(quantized_norm, quantized_norm.t()) / temperature
+    
+    # Convert to probabilities using softmax
+    sim_original = F.softmax(sim_original, dim=-1)
+    sim_quantized = F.softmax(sim_quantized, dim=-1)
+    
+    # Add small epsilon for numerical stability
+    sim_original = sim_original.clamp(min=eps)
+    sim_quantized = sim_quantized.clamp(min=eps)
+    
+    # Compute KL in both directions
+    kl_orig_quant = F.kl_div(
+        sim_quantized.log(), 
+        sim_original, 
+        reduction='batchmean',
+        log_target=False
+    )
+    
+    kl_quant_orig = F.kl_div(
+        sim_original.log(), 
+        sim_quantized, 
+        reduction='batchmean',
+        log_target=False
+    )
+    
+    # Average the two KL divergences
+    symmetric_kl = (kl_orig_quant + kl_quant_orig) / 2
+    
+    return symmetric_kl
 
 def eye_like(tensor):
     return torch.eye(*tensor.size(), out=torch.empty_like(tensor))
@@ -685,7 +745,7 @@ def contrastive_loss(embeddings, temperature=0.05):
 
 def get_dataloader(base_model_name, batch_size, num_workers=4, persistent_workers=True, prefetch_factor=2):
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
-    dataset = CombinedSimilarityDataset(tokenizer, max_length=256, max_samples_per_dataset=10000)
+    dataset = CombinedSimilarityDataset(tokenizer, max_length=256, max_samples_per_dataset=max_samples_per_dataset)
     print(f"Train Dataset size: {len(dataset)}")
     # Create a sampler that keeps pairs together while shuffling between pairs
     indices = list(range(0, len(dataset), 2))  # Get indices of first element of each pair
