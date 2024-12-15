@@ -191,26 +191,37 @@ class MatryoshkaTransformer(nn.Module):
   
         
         
-        self.base_transform = create_modern_mlp(
-            input_dim=input_dim,
-            hidden_dims=[input_dim * 4, input_dim * 4],
-            output_dim=input_dim * 4,
-            dropout_rate=0.1,
-            negative_slope=0.01,
-            use_skip_connections=True
-        )
+        # self.base_transform = create_modern_mlp(
+        #     input_dim=input_dim,
+        #     hidden_dims=[input_dim * 4, input_dim * 4],
+        #     output_dim=input_dim * 4,
+        #     dropout_rate=0.1,
+        #     negative_slope=0.01,
+        #     use_skip_connections=True
+        # )
+        
+        self.base_transform = nn.Identity()
   
         for dim in self.dimension_levels:  
             
             
-            block = create_modern_mlp(
-                input_dim=input_dim * 4,
-                hidden_dims=[input_dim * 4, input_dim * 2],
-                output_dim=dim - prev_dim,
-                dropout_rate=0.1,
-                negative_slope=0.01,
-                use_skip_connections=True
-            )
+            # block = create_modern_mlp(
+            #     input_dim=input_dim * 4,
+            #     hidden_dims=[input_dim * 4, input_dim * 2],
+            #     output_dim=dim - prev_dim,
+            #     dropout_rate=0.1,
+            #     negative_slope=0.01,
+            #     use_skip_connections=True
+            # )
+            
+            block = nn.Sequential(nn.Linear(input_dim, input_dim*8), nn.Linear(input_dim*8, dim - prev_dim))
+            # block = nn.Linear(input_dim, dim - prev_dim)
+            
+            # init block
+            nn.init.kaiming_normal_(block[0].weight)
+            nn.init.kaiming_normal_(block[1].weight)
+            nn.init.constant_(block[0].bias, 0)
+            nn.init.constant_(block[1].bias, 0)
 
             self.blocks.append(block)  
   
