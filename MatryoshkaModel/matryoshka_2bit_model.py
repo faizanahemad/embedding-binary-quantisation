@@ -1,4 +1,5 @@
 from ast import For
+from sympy import prem
 import torch  
 import torch.nn as nn  
 import torch.nn.functional as F  
@@ -153,6 +154,16 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
         assert embeddings.shape[1] == matryoshka_output_dim, f"Output dimension {embeddings.shape[1]} does not match desired output dimension {matryoshka_output_dim}"
 
         return embeddings.cpu().numpy()  
+
+
+class SliceLayer(nn.Module):
+    def __init__(self, start_dim, end_dim):
+        super().__init__()
+        self.start_dim = start_dim
+        self.end_dim = end_dim
+        
+    def forward(self, x):
+        return x[:, self.start_dim:self.end_dim]
   
 class MatryoshkaTransformer(nn.Module):  
     """  
@@ -200,7 +211,30 @@ class MatryoshkaTransformer(nn.Module):
         #     use_skip_connections=True
         # )
         
-        self.base_transform = nn.Identity()
+        self.base_transform = nn.Sequential(nn.Linear(input_dim, input_dim*8), 
+                                            nn.LayerNorm(input_dim*8), 
+                                            nn.LeakyReLU(), 
+                                            nn.Linear(input_dim*8, input_dim*8), 
+                                            nn.LayerNorm(input_dim*8), 
+                                            nn.LeakyReLU(), 
+                                            nn.Linear(input_dim*8, input_dim), 
+                                            nn.LayerNorm(input_dim))
+        
+        # init base transform
+        nn.init.kaiming_normal_(self.base_transform[0].weight)
+        nn.init.kaiming_normal_(self.base_transform[3].weight) 
+        nn.init.kaiming_normal_(self.base_transform[6].weight)
+        nn.init.constant_(self.base_transform[0].bias, 0)
+        nn.init.constant_(self.base_transform[3].bias, 0)
+        nn.init.constant_(self.base_transform[6].bias, 0)
+        
+        nn.init.constant_(self.base_transform[1].weight, 1)
+        nn.init.constant_(self.base_transform[4].weight, 1)
+        nn.init.constant_(self.base_transform[7].weight, 1)
+        nn.init.constant_(self.base_transform[1].bias, 0)
+        nn.init.constant_(self.base_transform[4].bias, 0)
+        nn.init.constant_(self.base_transform[7].bias, 0)
+        
   
         for dim in self.dimension_levels:  
             
@@ -214,22 +248,29 @@ class MatryoshkaTransformer(nn.Module):
             #     use_skip_connections=True
             # )
             
-            block = nn.Sequential(nn.Linear(input_dim, input_dim*8), nn.LayerNorm(input_dim*8), nn.LeakyReLU(), nn.Linear(input_dim*8, input_dim*8), nn.LayerNorm(input_dim*8), nn.LeakyReLU(), nn.Linear(input_dim*8, dim - prev_dim))
-            # block = nn.Linear(input_dim, dim - prev_dim)
+            # block = nn.Sequential(nn.Linear(input_dim*8, input_dim*8), nn.LayerNorm(input_dim*8), nn.LeakyReLU(), nn.Linear(input_dim*8, input_dim*8), nn.LayerNorm(input_dim*8), nn.LeakyReLU(), nn.Linear(input_dim*8, dim - prev_dim))
+            # # block = nn.Linear(input_dim, dim - prev_dim)
             
-            # init block
-            nn.init.kaiming_normal_(block[0].weight)
-            nn.init.kaiming_normal_(block[3].weight) 
-            nn.init.kaiming_normal_(block[6].weight)
-            nn.init.constant_(block[0].bias, 0)
-            nn.init.constant_(block[3].bias, 0)
-            nn.init.constant_(block[6].bias, 0)
+            # # init block
+            # nn.init.kaiming_normal_(block[0].weight)
+            # nn.init.kaiming_normal_(block[3].weight) 
+            # nn.init.kaiming_normal_(block[6].weight)
+            # nn.init.constant_(block[0].bias, 0)
+            # nn.init.constant_(block[3].bias, 0)
+            # nn.init.constant_(block[6].bias, 0)
             
-            # init layer norm
-            nn.init.constant_(block[1].weight, 1)
-            nn.init.constant_(block[4].weight, 1)
-            nn.init.constant_(block[1].bias, 0)
-            nn.init.constant_(block[4].bias, 0)
+            # # init layer norm
+            # nn.init.constant_(block[1].weight, 1)
+            # nn.init.constant_(block[4].weight, 1)
+            # nn.init.constant_(block[1].bias, 0)
+            # nn.init.constant_(block[4].bias, 0)
+            
+            
+                    
+            block = nn.Sequential(
+                nn.Identity(),
+                SliceLayer(prev_dim, dim)
+            )
 
             self.blocks.append(block)  
   
@@ -656,10 +697,12 @@ def information_bottleneck_regularization(embeddings_dict: dict) -> torch.Tensor
     dimensions = sorted(embeddings_dict.keys())  
     # Create increasing weights for higher dimensions  
     weights = {dim: np.sqrt(idx) for idx, dim in enumerate(dimensions, 1)}  
+    prev_dim = dimensions[0]
     for dim in dimensions[1:]:  # Skip the smallest dimension  
         emb = embeddings_dict[dim]  
         # Apply weighted L1 regularization - higher dimensions get stronger regularization  
-        reg_loss += weights[dim] * torch.mean(torch.abs(emb))  
+        reg_loss += weights[dim] * torch.mean(torch.abs(emb[:, prev_dim:]))  
+        prev_dim = dim
     return reg_loss  
   
 def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,  
