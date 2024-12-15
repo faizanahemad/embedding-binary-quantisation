@@ -3,10 +3,10 @@ base_model_name = "sentence-transformers/all-MiniLM-L12-v2"
 reg_strength = 0.01
 num_epochs = 5
 batch_size = 512
-lr = 0.001
+lr = 0.0001 # 0.001
 max_grad_norm = 5.0
 
-max_samples_per_dataset = 10000
+max_samples_per_dataset = 100000 # 10000
 
 need_baselines = True
 binary_baseline = False
@@ -46,7 +46,7 @@ save_dirs = [
     'run_20241201_1800', 
     '__', 
     'run_20241202_1422', 
-    'run_20241215_1049', 
+    'run_20241215_1757', 
 ]
 
 # Thresholds are not changing with training for OneBitTwoBit

@@ -779,7 +779,7 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
                 weight_large_dim = scale_factor * np.sqrt(dim)
                 loss_similarity += weight_large_dim * similarity_preservation_loss(embeddings, emb)  
                 loss_kl_similarity += weight_large_dim * kl_similarity_preservation_loss(embeddings, emb)
-                contrastive_loss_per_dim = weight_large_dim * contrastive_loss(embeddings)
+                contrastive_loss_per_dim = weight_large_dim * 0.01 * contrastive_loss(emb)
                 overall_contrastive_loss += contrastive_loss_per_dim
                 overall_rank_loss += weight_large_dim * rank_preserving_loss(embeddings, emb)
                 
@@ -788,7 +788,8 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
             embeddings_original = embeddings
             # loss_kl = kl_divergence(embeddings_original, embeddings_new)
             # loss_dict['kl'] = loss_kl.item()
-            loss = loss_similarity + loss_kl_similarity + overall_rank_loss # + 0.1 * overall_contrastive_loss # + reg_strength * loss_ortho + reg_strength * loss_info_bottleneck + # + loss_kl
+            loss = loss_similarity + loss_kl_similarity + overall_rank_loss + overall_contrastive_loss # + reg_strength * loss_ortho + reg_strength * loss_info_bottleneck + # + loss_kl
+            # loss = overall_contrastive_loss
             loss_dict['similarity'] = loss_similarity.item()
             loss_dict['kl_similarity'] = loss_kl_similarity.item()
             loss_dict['total'] = loss.item()

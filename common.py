@@ -691,7 +691,7 @@ def rank_preserving_loss(original_embeddings, quantized_embeddings):
     return loss
 
 
-def contrastive_loss(embeddings, temperature=0.05):
+def contrastive_loss(embeddings, temperature=0.05, hard_negative_ratio=0.25):
     """
     Compute InfoNCE/SimCSE style contrastive loss with temperature scaling.
     
@@ -699,6 +699,7 @@ def contrastive_loss(embeddings, temperature=0.05):
         embeddings (torch.Tensor): Batch of embeddings (batch_size, embedding_dim)
         temperature (float): Temperature parameter to scale similarities. 
                            Lower values make the model more sensitive to differences.
+        hard_negative_ratio (float): Ratio of hard negatives to use in the loss computation.
         
     Returns:
         loss (torch.Tensor): Scalar contrastive loss value
@@ -706,7 +707,7 @@ def contrastive_loss(embeddings, temperature=0.05):
     # Normalize embeddings
     embeddings = F.normalize(embeddings, p=2, dim=1)
     
-    # Compute similarity matrix with temperature scaling
+    # Compute similarity matrix
     sim_matrix = torch.matmul(embeddings, embeddings.t())
     
     # Create positive pair mask
@@ -718,30 +719,92 @@ def contrastive_loss(embeddings, temperature=0.05):
         pos_mask[i, i+1] = 1
         pos_mask[i+1, i] = 1
     
-    # Apply temperature scaling before exponentiation
+    # Apply temperature scaling
     sim_matrix = sim_matrix / temperature
     
-    # For each anchor, get its positive similarity and all similarities
+    # Apply LogSumExp trick for numerical stability
+    sim_max, _ = torch.max(sim_matrix, dim=1, keepdim=True)
+    sim_matrix = sim_matrix - sim_max.detach()
+    
+    # Compute exp(similarity/temperature) for all pairs
     exp_sim_matrix = torch.exp(sim_matrix)
     
-    # Zero out diagonal to exclude self-similarity
-    exp_sim_matrix = exp_sim_matrix * (1 - torch.eye(batch_size, device=embeddings.device))
+    # Create negative mask (everything except positives and self)
+    neg_mask = 1 - pos_mask - torch.eye(batch_size, device=embeddings.device)
     
     # Compute positive similarities
-    pos_sim = exp_sim_matrix * pos_mask
+    pos_sim = (exp_sim_matrix * pos_mask).sum(dim=1)
     
-    # Sum positive similarities (should be only one per row)
-    pos_sim = pos_sim.sum(dim=1)
+    # Compute denominator (sum of all negative similarities + positive similarities)
+    neg_sim = (exp_sim_matrix * neg_mask).sum(dim=1)
     
-    # Sum all similarities for denominator (excluding self-similarity)
-    all_sim = exp_sim_matrix.sum(dim=1)
+    # Compute loss: -log(pos_sim / (pos_sim + neg_sim))
+    loss = -torch.log(pos_sim / (pos_sim + neg_sim + 1e-8))
+    
+    
+    # Find hardest negatives (highest similarities among negatives)
+    neg_sims = exp_sim_matrix * neg_mask
+    k = int(batch_size * hard_negative_ratio)
+    hard_negatives, _ = torch.topk(neg_sims, k=k, dim=1)
+    
+    # Use only hard negatives in denominator
+    neg_sim = hard_negatives.sum(dim=1)
+    
+    hard_negative_loss = -torch.log(pos_sim / (pos_sim + neg_sim + 1e-8))
+    
+    loss = loss.mean() + hard_negative_loss.mean()
+    
+    return loss
+    
+    
     
     # Compute loss: -log(pos_sim / all_sim)
     loss = -torch.log(pos_sim / all_sim + 1e-8)  # Add epsilon for numerical stability
-    
-    return loss.mean()
-    
   
+    # Compute loss: -log(pos_sim / all_sim)
+    loss = -torch.log(pos_sim / all_sim + 1e-8)  # Add epsilon for numerical stability
+
+class PairwiseShuffleSampler(torch.utils.data.Sampler):
+    """
+    Custom sampler that keeps pairs together while shuffling between epochs.
+    Pairs are assumed to be consecutive indices (0,1), (2,3), etc.
+    """
+    def __init__(self, data_source):
+        self.data_source = data_source
+        # Get indices of first element of each pair
+        self.pair_first_indices = list(range(0, len(data_source), 2))
+        
+    def __iter__(self):
+        # Shuffle the pairs (but keep elements within pairs together)
+        shuffled_pair_indices = torch.randperm(len(self.pair_first_indices)).tolist()
+        final_indices = []
+        for idx in shuffled_pair_indices:
+            pair_start = self.pair_first_indices[idx]
+            final_indices.extend([pair_start, pair_start + 1])
+        return iter(final_indices)
+    
+    def __len__(self):
+        return len(self.data_source)
+
+def get_dataloader(base_model_name, batch_size, num_workers=4, persistent_workers=True, prefetch_factor=2):
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+    dataset = CombinedSimilarityDataset(tokenizer, max_length=256, max_samples_per_dataset=max_samples_per_dataset)
+    print(f"Train Dataset size: {len(dataset)}")
+    
+    # Use our custom sampler instead of SequentialSampler
+    sampler = PairwiseShuffleSampler(dataset)
+    
+    dataloader = DataLoader(
+        dataset, 
+        batch_size=batch_size, 
+        sampler=sampler,
+        num_workers=num_workers, 
+        persistent_workers=persistent_workers, 
+        prefetch_factor=prefetch_factor
+    )
+    print(f"Train Dataloader size: {len(dataloader)}")
+    return dataloader
+
 
 def get_dataloader(base_model_name, batch_size, num_workers=4, persistent_workers=True, prefetch_factor=2):
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
