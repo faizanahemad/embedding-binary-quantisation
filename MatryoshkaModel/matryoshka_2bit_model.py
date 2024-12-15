@@ -212,28 +212,13 @@ class MatryoshkaTransformer(nn.Module):
         # )
         
         self.base_transform = nn.Sequential(nn.Linear(input_dim, input_dim*8), 
-                                            nn.LayerNorm(input_dim*8), 
-                                            nn.LeakyReLU(), 
-                                            nn.Linear(input_dim*8, input_dim*8), 
-                                            nn.LayerNorm(input_dim*8), 
-                                            nn.LeakyReLU(), 
-                                            nn.Linear(input_dim*8, input_dim), 
-                                            nn.LayerNorm(input_dim))
+                                            nn.Linear(input_dim*8, input_dim))
         
         # init base transform
         nn.init.kaiming_normal_(self.base_transform[0].weight)
-        nn.init.kaiming_normal_(self.base_transform[3].weight) 
-        nn.init.kaiming_normal_(self.base_transform[6].weight)
+        nn.init.kaiming_normal_(self.base_transform[1].weight)
         nn.init.constant_(self.base_transform[0].bias, 0)
-        nn.init.constant_(self.base_transform[3].bias, 0)
-        nn.init.constant_(self.base_transform[6].bias, 0)
-        
-        nn.init.constant_(self.base_transform[1].weight, 1)
-        nn.init.constant_(self.base_transform[4].weight, 1)
-        nn.init.constant_(self.base_transform[7].weight, 1)
         nn.init.constant_(self.base_transform[1].bias, 0)
-        nn.init.constant_(self.base_transform[4].bias, 0)
-        nn.init.constant_(self.base_transform[7].bias, 0)
         
   
         for dim in self.dimension_levels:  
