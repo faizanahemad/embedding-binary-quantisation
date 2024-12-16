@@ -406,6 +406,61 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         )
         task_results['Matryoshka_Baseline'] = results_matryoshka
         
+    if 'Matryoshka_2bit' in test_modules:
+        # 7. Matryoshka_2bit Trained
+        print("  Evaluating Matryoshka_2bit Trained...")
+        embedding_model_name = base_model_name
+        embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
+        matryoshka_model_2bit = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim//4, embedding_dim//2, embedding_dim], train_binary=False, train_two_bit=True, expand_two_bit_to_three_bits=False)
+        matryoshka_model_2bit.load(f'saved_models/{save_dirs[6]}/matryoshka_model_2bit.pth')
+        matryoshka_model_2bit.mteb_model_meta.name = 'Matryoshka_2bit_Trained'
+        matryoshka_model_2bit.do_binary = False
+        matryoshka_model_2bit.do_two_bits = True
+        results_matryoshka_2bit = evaluate_model_on_tasks(
+            model=matryoshka_model_2bit,
+            tasks=[task],
+            model_name='Matryoshka_2bit_Trained',
+            results_dir=results_dir
+        )
+        task_results['Matryoshka_2bit_Trained'] = results_matryoshka_2bit
+        
+    if "Matryoshka_1bit" in test_modules:
+        # 8. Matryoshka_1bit Trained
+        print("  Evaluating Matryoshka_1bit Trained...")
+        embedding_model_name = base_model_name
+        embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
+        matryoshka_model_1bit = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim//4, embedding_dim//2, embedding_dim], train_binary=True, train_two_bit=False, expand_two_bit_to_three_bits=False)
+        matryoshka_model_1bit.load(f'saved_models/{save_dirs[7]}/matryoshka_model_1bit.pth')
+        matryoshka_model_1bit.mteb_model_meta.name = 'Matryoshka_1bit_Trained'
+        matryoshka_model_1bit.do_binary = True
+        matryoshka_model_1bit.do_two_bits = False
+        results_matryoshka_1bit = evaluate_model_on_tasks(
+            model=matryoshka_model_1bit,
+            tasks=[task],
+            model_name='Matryoshka_1bit_Trained',
+            results_dir=results_dir
+        )
+        task_results['Matryoshka_1bit_Trained'] = results_matryoshka_1bit
+        
+        
+    if "Matryoshka_2bit_3bit" in test_modules:
+        # 9. Matryoshka_2bit_3bit Trained
+        print("  Evaluating Matryoshka_2bit_3bit Trained...")
+        embedding_model_name = base_model_name
+        embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
+        matryoshka_model_2bit_3bit = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim//4, embedding_dim//2, embedding_dim], train_binary=False, train_two_bit=True, expand_two_bit_to_three_bits=True)
+        matryoshka_model_2bit_3bit.load(f'saved_models/{save_dirs[8]}/matryoshka_model_2bit.pth')
+        matryoshka_model_2bit_3bit.do_binary = False
+        matryoshka_model_2bit_3bit.do_two_bits = True
+        matryoshka_model_2bit_3bit.mteb_model_meta.name = 'Matryoshka_2bit_3bit_Trained'
+        results_matryoshka_2bit_3bit = evaluate_model_on_tasks(
+            model=matryoshka_model_2bit_3bit,
+            tasks=[task],
+            model_name='Matryoshka_2bit_3bit_Trained',
+            results_dir=results_dir
+        )
+        task_results['Matryoshka_2bit_3bit_Trained'] = results_matryoshka_2bit_3bit
+        
     # Print individual task results
     df_task_results = aggregate_results(task_results, [task])
     print(f"\nResults for task {task}:")
@@ -480,7 +535,10 @@ def main():
         'QuantStage3_Trained': [],
         'OneBitTwoBit_Trained': [],
         'Matryoshka_Trained': [],
-        'Matryoshka_Baseline': []
+        'Matryoshka_Baseline': [],
+        'Matryoshka_2bit_Trained': [],
+        'Matryoshka_1bit_Trained': [],
+        'Matryoshka_2bit_3bit_Trained': []
     }
 
     # Evaluate each task individually

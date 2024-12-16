@@ -55,6 +55,8 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
         }
         self.mteb_model_meta = ModelCardData(**self.model_card_data)
         
+        self.do_two_bits = False
+        self.do_binary = False
   
         
             
@@ -91,8 +93,6 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
     def encode(self,  
                sentences: List[str],  
                output_dim: int = matryoshka_output_dim,  
-               do_binary: bool = False,  
-               do_two_bits: bool = False,  
                **kwargs) -> np.ndarray:  
         """  
         Encode sentences to obtain embeddings.  
@@ -112,9 +112,9 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
             output_dim = self.max_dim  
         assert output_dim in self.dimension_levels, f"Output dimension must be one of {self.dimension_levels}"  
   
-        if do_binary and not self.train_binary:  
+        if self.do_binary and not self.train_binary:  
             raise ValueError("Model was not trained with binary quantization. Set train_binary=True during training.")  
-        if do_two_bits and not self.train_two_bit:  
+        if self.do_two_bits and not self.train_two_bit:  
             raise ValueError("Model was not trained with 2-bit quantization. Set train_two_bit=True during training.")  
   
         # Get embeddings from the frozen model  
@@ -136,22 +136,22 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
             with torch.no_grad():  
                 matryoshka_embeddings = self.transformer(  
                     base_embeddings,  
-                    apply_binary=do_binary,  
-                    apply_two_bit=do_two_bits  
+                    apply_binary=self.do_binary,  
+                    apply_two_bit=self.do_two_bits  
                 )  
                 embeddings = matryoshka_embeddings[output_dim]  
             assert not torch.allclose(embeddings, baseline_embeddings, rtol=1e-3, atol=1e-5), "Transformed embeddings should be different from baseline embeddings"
   
         # If binary mode, convert embeddings to binary  
-        if do_binary:  
+        if self.do_binary:  
             embeddings = (embeddings > 0.5).float()  
-        elif do_two_bits:  
+        elif self.do_two_bits:  
             # Quantize embeddings to 2 bits per dimension  
             embeddings = self.transformer.quantize_two_bits(embeddings, self.expand_two_bit_to_three_bits)  
         else:  
             # Normalize embeddings  
             embeddings = F.normalize(embeddings, p=2, dim=1)  
-        assert embeddings.shape[1] == matryoshka_output_dim, f"Output dimension {embeddings.shape[1]} does not match desired output dimension {matryoshka_output_dim}"
+        assert embeddings.shape[1] == (matryoshka_output_dim * (3 if self.expand_two_bit_to_three_bits else 1)), f"Output dimension {embeddings.shape[1]} does not match desired output dimension {matryoshka_output_dim}"
 
         return embeddings.cpu().numpy()  
 
@@ -337,7 +337,7 @@ class MatryoshkaTransformer(nn.Module):
             dim = embeddings.size(1)  
             quant_layer = self.quantization_layers[str(dim)]  
             embeddings = quant_layer.expand_to_three_bits(embeddings)  
-        return embeddings  
+        return embeddings
   
 class QuantizationLayer(nn.Module):  
     """  
@@ -366,6 +366,7 @@ class QuantizationLayer(nn.Module):
         self.expand_two_bit_to_three_bits = expand_two_bit_to_three_bits  
         self.annealing_rate = annealing_rate  
         self.scale = nn.Parameter(torch.ones(dim))  
+        self.initial_temperature = initial_temperature
   
         # Initialize thresholds for multi-bit quantization  
         self.thresholds = nn.Parameter(torch.zeros(dim, self.num_thresholds()))  
@@ -593,10 +594,21 @@ def quantization_regularization_loss(embeddings_dict: dict,
     weight = progress  # Increase weight over time  
     for emb in embeddings_dict.values():  
         if quantization_bits == 1:  
-            # Binary quantization regularization  
-            bce_loss = F.binary_cross_entropy(emb, torch.ones_like(emb) * 0.5)  
-            l1_loss = torch.mean(torch.abs(emb * (1 - emb)))  
-            reg_loss += weight * (bce_loss + l1_loss)  
+            # Binary quantization regularization
+            normalized_emb = torch.sigmoid(emb)
+            
+            # Binary entropy loss to push values away from 0.5 towards 0 or 1
+            binary_entropy = -(normalized_emb * torch.log(normalized_emb + 1e-10) + 
+                             (1 - normalized_emb) * torch.log(1 - normalized_emb + 1e-10))
+            
+            # Additional distance loss to push values towards extremes
+            distance_loss = torch.min(
+                torch.abs(normalized_emb), 
+                torch.abs(1 - normalized_emb)
+            ).mean()
+            
+            reg_loss += weight * (binary_entropy.mean() + distance_loss)
+            
         elif quantization_bits == 2:  
             # Multi-bit quantization regularization  
             # Encourage embeddings to be close to integer levels  
@@ -670,7 +682,8 @@ def orthogonality_regularization(embeddings_dict: dict) -> torch.Tensor:
 def information_bottleneck_regularization(embeddings_dict: dict) -> torch.Tensor:  
     """  
     Compute information bottleneck regularization to focus critical information in lower dimensions.  
-    Applies progressively stronger L1 regularization to higher dimensions to encourage sparsity.  
+    Applies progressively stronger L1 regularization to higher dimensions to encourage sparsity.
+    Uses linear interpolation to create smooth weight transitions between dimension levels.
   
     Args:  
         embeddings_dict (dict): Dictionary of embeddings at different dimensions.  
@@ -680,15 +693,28 @@ def information_bottleneck_regularization(embeddings_dict: dict) -> torch.Tensor
     """  
     reg_loss = 0.0  
     dimensions = sorted(embeddings_dict.keys())  
-    # Create increasing weights for higher dimensions  
-    weights = {dim: np.sqrt(idx) for idx, dim in enumerate(dimensions, 1)}  
-    prev_dim = dimensions[0]
-    for dim in dimensions[1:]:  # Skip the smallest dimension  
-        emb = embeddings_dict[dim]  
-        # Apply weighted L1 regularization - higher dimensions get stronger regularization  
-        reg_loss += weights[dim] * torch.mean(torch.abs(emb[:, prev_dim:]))  
-        prev_dim = dim
-    return reg_loss  
+    
+    for idx, dim in enumerate(dimensions[1:], 1):  # Skip the smallest dimension
+        emb = embeddings_dict[dim]
+        prev_dim = dimensions[idx-1]
+        segment_size = dim - prev_dim
+        
+        # Create linearly increasing weights for each dimension in the segment
+        # from sqrt(idx-1) to sqrt(idx)
+        start_weight = idx-1 # np.sqrt(idx-1)
+        end_weight = idx # np.sqrt(idx)
+        
+        # Generate weights for each dimension in the segment
+        dimension_weights = torch.linspace(start_weight, end_weight, segment_size, device=emb.device)
+        
+        # Apply the weights to each dimension individually
+        segment_values = emb[:, prev_dim:dim]  # Shape: (batch_size, segment_size)
+        weighted_values = segment_values * dimension_weights.view(1, -1)  # Broadcasting weights across batch
+        
+        # Compute L1 regularization with dimension-specific weights
+        reg_loss += torch.mean(torch.abs(weighted_values))
+        
+    return reg_loss
   
 def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,  
                            dataloader,  
@@ -766,7 +792,7 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
             # loss_dict['contrastive'] = loss_contrastive.item()
             loss_ortho = 0.01 * orthogonality_regularization(embeddings_dict)  
             loss_dict['ortho'] = loss_ortho.item()
-            loss_info_bottleneck = 0.1 * information_bottleneck_regularization(embeddings_dict)  
+            loss_info_bottleneck = information_bottleneck_regularization(embeddings_dict)  
             loss_dict['info_bottleneck'] = loss_info_bottleneck.item()
             loss_similarity = 0.0  
             loss_kl_similarity = 0.0
@@ -788,7 +814,7 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
             embeddings_original = embeddings
             # loss_kl = kl_divergence(embeddings_original, embeddings_new)
             # loss_dict['kl'] = loss_kl.item()
-            loss = loss_similarity + loss_kl_similarity + overall_rank_loss + overall_contrastive_loss # + reg_strength * loss_ortho + reg_strength * loss_info_bottleneck + # + loss_kl
+            loss = loss_similarity + loss_kl_similarity + overall_rank_loss + overall_contrastive_loss # + reg_strength * loss_info_bottleneck # + reg_strength * loss_ortho + # + loss_kl
             # loss = overall_contrastive_loss
             loss_dict['similarity'] = loss_similarity.item()
             loss_dict['kl_similarity'] = loss_kl_similarity.item()

@@ -139,6 +139,26 @@ def main():
         matryoshka_model = train_matryoshka_model(matryoshka_model, dataloader, num_epochs=num_epochs)
         matryoshka_model.save(os.path.join(save_dir, 'matryoshka_model.pth'))
         
+    if "Matryoshka_2bit" in train_modules:
+        embedding_model = SentenceTransformerEmbeddingCaller(base_model_name)
+        matryoshka_model = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim//4, embedding_dim//2, embedding_dim], train_binary=False, train_two_bit=True, expand_two_bit_to_three_bits=False)
+        matryoshka_model.to(device)
+        matryoshka_model = train_matryoshka_model(matryoshka_model, dataloader, num_epochs=num_epochs)
+        matryoshka_model.save(os.path.join(save_dir, 'matryoshka_model_2bit.pth'))
+        
+    if "Matryoshka_2bit_3bit" in train_modules:
+        embedding_model = SentenceTransformerEmbeddingCaller(base_model_name)
+        matryoshka_model = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim//4, embedding_dim//2, embedding_dim], train_binary=False, train_two_bit=True, expand_two_bit_to_three_bits=True)
+        matryoshka_model.to(device)
+        matryoshka_model = train_matryoshka_model(matryoshka_model, dataloader, num_epochs=num_epochs)
+        matryoshka_model.save(os.path.join(save_dir, 'matryoshka_model_3bit.pth'))
+        
+    if "Matryoshka_1bit" in train_modules:
+        embedding_model = SentenceTransformerEmbeddingCaller(base_model_name)
+        matryoshka_model = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=[embedding_dim//4, embedding_dim//2, embedding_dim], train_binary=True, train_two_bit=False, expand_two_bit_to_three_bits=False)
+        matryoshka_model.to(device)
+        matryoshka_model = train_matryoshka_model(matryoshka_model, dataloader, num_epochs=num_epochs)
+        matryoshka_model.save(os.path.join(save_dir, 'matryoshka_model_1bit.pth'))
     
       
     print(f'Saving models to {save_dir}')
