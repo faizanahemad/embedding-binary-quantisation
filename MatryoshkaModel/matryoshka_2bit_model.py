@@ -1,5 +1,5 @@
 from ast import For
-from sympy import prem
+from sympy import prem, trailing
 import torch  
 import torch.nn as nn  
 import torch.nn.functional as F  
@@ -10,6 +10,14 @@ from typing import List
 from tqdm import tqdm  
 from config import *  
 from common import create_mlp, create_modern_mlp, kl_similarity_preservation_loss, rank_preserving_loss, similarity_preservation_loss, SentenceTransformerEmbeddingCaller, OriginalEmbeddingCaller, ModelCardData, contrastive_loss
+
+
+class CustomizedMatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
+    def __init__(self, embedding_model: OriginalEmbeddingCaller, dimension_levels: List[int], two_bits: int, one_bits: int, half_bits: int, expand_two_bit_to_three_bits: bool = False):
+        # USe a skip connection for the half bits part to create a better embedding
+        # Compare 2 bit to 3 bit to just expanding to 3 bits at the end and then using binary quantization
+        pass
+        
   
 class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):  
     """  
@@ -78,6 +86,16 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
         
     def load(self, path: str):
         self.transformer.load_state_dict(torch.load(path, map_location=torch.device('cpu') if not torch.cuda.is_available() else torch.device('cuda')))
+        
+    def calculate_thresholds(self, sample_embeddings: torch.Tensor):
+        """
+        Calculate thresholds based on sample embeddings.
+        """
+        thresholds = {}
+        for idx, quant_layer in self.transformer.quantization_layers.items():
+            if quant_layer.quantization_bits > 1:
+                thresholds[idx] = quant_layer.calculate_thresholds(sample_embeddings)
+        return thresholds
   
     def init_thresholds(self, sample_embeddings: torch.Tensor):  
         """  
@@ -87,7 +105,7 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
             sample_embeddings (torch.Tensor): Sample embeddings used for initializing thresholds.  
         """  
         for quant_layer in self.transformer.quantization_layers.values():  
-            if quant_layer.quantization_bits > 1:  
+            if quant_layer.quantization_bits >= 1:  
                 quant_layer.initialize_thresholds(sample_embeddings)  
   
     def encode(self,  
@@ -111,11 +129,6 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
         if output_dim is None:  
             output_dim = self.max_dim  
         assert output_dim in self.dimension_levels, f"Output dimension must be one of {self.dimension_levels}"  
-  
-        if self.do_binary and not self.train_binary:  
-            raise ValueError("Model was not trained with binary quantization. Set train_binary=True during training.")  
-        if self.do_two_bits and not self.train_two_bit:  
-            raise ValueError("Model was not trained with 2-bit quantization. Set train_two_bit=True during training.")  
   
         # Get embeddings from the frozen model  
         with torch.no_grad():  
@@ -211,8 +224,8 @@ class MatryoshkaTransformer(nn.Module):
         #     use_skip_connections=True
         # )
         
-        self.base_transform = nn.Sequential(nn.Linear(input_dim, input_dim*8), 
-                                            nn.Linear(input_dim*8, input_dim))
+        self.base_transform = nn.Sequential(nn.Linear(input_dim, input_dim*32), 
+                                            nn.Linear(input_dim*32, input_dim))
         
         # init base transform
         nn.init.kaiming_normal_(self.base_transform[0].weight)
@@ -311,6 +324,10 @@ class MatryoshkaTransformer(nn.Module):
                     quantize_binary=apply_binary,  
                     quantize_two_bit=apply_two_bit  
                 )  
+            elif apply_two_bit:
+                pass
+            elif apply_binary:
+                all_embeddings = (all_embeddings > 0.0).float()
             embeddings[dim] = all_embeddings  
   
         embeddings_dict = {}  
@@ -382,7 +399,20 @@ class QuantizationLayer(nn.Module):
         Returns:  
             int: Number of thresholds.  
         """  
-        return 2 ** self.quantization_bits - 1  
+        return 2 ** self.quantization_bits - 1 
+    
+    def calculate_thresholds(self, sample_embeddings: torch.Tensor):
+        """
+        Calculate thresholds based on sample embeddings.
+        """
+        quantiles = torch.linspace(0, 1, self.num_thresholds() + 2, device=sample_embeddings.device)[1:-1]
+        thresholds = []
+        for d in range(self.dim):
+            values = sample_embeddings[:, d]
+            percentiles = torch.quantile(values, quantiles)
+            thresholds.append(percentiles)
+        thresholds = torch.stack(thresholds)
+        return thresholds
   
     def initialize_thresholds(self, sample_embeddings: torch.Tensor):  
         """  
@@ -391,14 +421,21 @@ class QuantizationLayer(nn.Module):
         Args:  
             sample_embeddings (torch.Tensor): Sample embeddings, shape (num_samples, dim).  
         """  
-        quantiles = torch.linspace(0, 1, self.num_thresholds() + 2)[1:-1]  
-        thresholds = []  
-        for d in range(self.dim):  
-            values = sample_embeddings[:, d]  
-            percentiles = torch.quantile(values, quantiles)  
-            thresholds.append(percentiles)  
-        thresholds = torch.stack(thresholds)  
-        self.thresholds.data = thresholds  
+        thresholds = self.calculate_thresholds(sample_embeddings)
+        self.thresholds.data = thresholds.to(self.thresholds.device)  
+        
+        
+    def update_thresholds(self, batch_embeddings: torch.Tensor):
+        """
+        Update thresholds based on the current batch statistics.
+        Can be called after each batch to maintain adaptive thresholds.
+        
+        Args:
+            batch_embeddings (torch.Tensor): Current batch embeddings.
+        """
+        thresholds = self.calculate_thresholds(batch_embeddings)
+        momentum = 0.995
+        self.thresholds.data = momentum * self.thresholds.data + (1 - momentum) * thresholds.to(self.thresholds.device)  
   
     def create_codebook(self) -> dict:  
         """  
@@ -433,67 +470,177 @@ class QuantizationLayer(nn.Module):
             torch.Tensor: Quantized embeddings.  
         """  
         x = x * self.scale  # Learnable scaling  
-        if self.quantization_bits == 1 and quantize_binary:  
+        if self.quantization_bits == 1:  
             # 1-bit quantization logic  
-            x = x - self.thresholds.squeeze(-1)  # Subtract thresholds  
+            x = x - self.thresholds.squeeze(-1)  # Subtract thresholds 
+            temperature = self.temperature.item()
+            x = x / temperature
+            
             if training:  
-                x = torch.sigmoid(x / self.temperature)  
+                x = torch.sigmoid(x)   
                 # Apply Straight-Through Estimator (STE)  
                 binary_x = (x > 0.5).float()  
                 x = x + (binary_x - x).detach()  
-            else:  
+            elif quantize_binary:  
                 x = (x > 0.0).float()  
-        elif self.quantization_bits == 2 and quantize_two_bit:  
+            else:
+                x = torch.sigmoid(x)   
+        elif self.quantization_bits == 2:  
             # 2-bit quantization logic  
-            x = self.multi_bit_quantization(x, training)  
+            x = self.multi_bit_quantization(x, training, quantize_two_bit)  
         return x  
+    
+    
+    def multi_bit_quantization(self, embeddings: torch.Tensor, training: bool = True, quantize_two_bit: bool = True) -> torch.Tensor:
+        """
+        Quantize embeddings using hard thresholds with straight-through gradient estimation.
+        For 2-bit quantization:
+        - Level 0: x ≤ t1
+        - Level 1: t1 < x ≤ t2
+        - Level 2: t2 < x ≤ t3
+        - Level 3: x > t3
+        
+        Quantize embeddings using hard thresholds with straight-through gradient estimation.
+        Uses hard assignments during both training and inference, but allows gradient flow
+        through thresholds during training.
+        
+        Args:
+            embeddings (torch.Tensor): Input embeddings.
+            training (bool): Whether in training mode.
+            quantize_two_bit (bool): Whether to apply quantization.
+        
+        Returns:
+            torch.Tensor: Quantized embeddings.
+        """
+        # Sort thresholds to maintain ordering
+        thresholds = torch.sort(self.thresholds, dim=1)[0]  # Shape: (dim, num_thresholds)
+        assert thresholds.shape[1] == 3, f"Expected 3 thresholds for 2-bit quantization, got {thresholds.shape[1]}"
+        
+        # Initialize output tensor
+        quantized = torch.zeros_like(embeddings)
+        
+        if training:
+            with torch.no_grad():
+                # Forward pass: hard assignments
+                # Level 0: x ≤ t1
+                mask_0 = (embeddings <= thresholds[:, 0])
+                quantized[mask_0] = 0
+                
+                # Level 1: t1 < x ≤ t2
+                mask_1 = (embeddings > thresholds[:, 0]) & (embeddings <= thresholds[:, 1])
+                quantized[mask_1] = 1
+                
+                # Level 2: t2 < x ≤ t3
+                mask_2 = (embeddings > thresholds[:, 1]) & (embeddings <= thresholds[:, 2])
+                quantized[mask_2] = 2
+                
+                # Level 3: x > t3
+                mask_3 = (embeddings > thresholds[:, 2])
+                quantized[mask_3] = 3
+            
+            # Custom straight-through gradient estimation
+            grad_mask = torch.zeros_like(embeddings, requires_grad=True)
+            
+            # Explicitly calculate gradients for each level
+            grad_mask = (
+                0 * (embeddings <= thresholds[:, 0]).float() +
+                1 * ((embeddings > thresholds[:, 0]) & (embeddings <= thresholds[:, 1])).float() +
+                2 * ((embeddings > thresholds[:, 1]) & (embeddings <= thresholds[:, 2])).float() +
+                3 * (embeddings > thresholds[:, 2]).float()
+            )
+            
+            # Combine hard assignments with differentiable gradient path
+            quantized = quantized.detach() + (grad_mask - grad_mask.detach())
+            
+        else:
+            # During inference, use the same explicit hard thresholds
+            mask_0 = (embeddings <= thresholds[:, 0])
+            mask_1 = (embeddings > thresholds[:, 0]) & (embeddings <= thresholds[:, 1])
+            mask_2 = (embeddings > thresholds[:, 1]) & (embeddings <= thresholds[:, 2])
+            mask_3 = (embeddings > thresholds[:, 2])
+            
+            quantized[mask_0] = 0
+            quantized[mask_1] = 1
+            quantized[mask_2] = 2
+            quantized[mask_3] = 3
+            
+            if quantize_two_bit:
+                pass
+            else:
+                quantized = (quantized + embeddings)/2
+        
+        return quantized
   
-    def multi_bit_quantization(self, embeddings: torch.Tensor, training: bool = True) -> torch.Tensor:  
-        """  
-        Quantize embeddings to multiple bits per dimension using multi-threshold quantization.  
-  
-        Args:  
-            embeddings (torch.Tensor): Input embeddings.  
-            training (bool): Indicates whether in training mode.  
-  
-        Returns:  
-            torch.Tensor: Quantized embeddings.  
-        """  
-        thresholds = self.thresholds  # Shape: (dim, num_thresholds)  
-        # Enforce ordering constraints on thresholds by sorting  
-        thresholds = torch.sort(thresholds, dim=1)[0]  # Shape: (dim, num_thresholds)  
-  
-        # Expand dimensions for broadcasting  
-        embeddings_expanded = embeddings.unsqueeze(2)  # Shape: (batch_size, dim, 1)  
-        thresholds_expanded = thresholds.unsqueeze(0)  # Shape: (1, dim, num_thresholds)  
-  
-        # Compute logits for sigmoid  
-        k = 1.0 / self.temperature    # Temperature parameter controlling the steepness  
-        logits = k * (embeddings_expanded - thresholds_expanded)  
-        sigma = torch.sigmoid(logits)  # Shape: (batch_size, dim, num_thresholds)  
-  
-        # Compute probabilities for each quantization level  
-        probs = [1.0 - sigma[:, :, 0]]  
-        for i in range(self.num_thresholds() - 1):  
-            probs.append(sigma[:, :, i] - sigma[:, :, i + 1])  
-        probs.append(sigma[:, :, -1])  
-  
-        # Stack probabilities  
-        probabilities = torch.stack(probs, dim=2)  # Shape: (batch_size, dim, num_levels)  
-  
-        # Quantization levels  
-        levels = torch.arange(2 ** self.quantization_bits, dtype=torch.float32, device=embeddings.device)  
-  
-        # Compute weighted sum  
-        quantized_embeddings = torch.einsum('bdk,k->bd', probabilities, levels)  
-  
-        if training:  
-            # Apply Straight-Through Estimator (STE)  
-            quantized_levels = torch.round(quantized_embeddings)  
-            quantized_embeddings = quantized_embeddings + (quantized_levels - quantized_embeddings).detach()  
-        else:  
-            quantized_embeddings = torch.round(quantized_embeddings)  
-        return quantized_embeddings  
+    def multi_bit_quantization_v0(self, embeddings: torch.Tensor, training: bool = True, quantize_two_bit: bool = True) -> torch.Tensor:
+        """
+        Quantize embeddings to multiple bits per dimension using multi-threshold quantization.
+        
+        Args:
+            embeddings (torch.Tensor): Input embeddings.
+            training (bool): Indicates whether in training mode.
+            quantize_two_bit (bool): Whether to apply quantization during inference.
+        
+        Returns:
+            torch.Tensor: Quantized embeddings.
+        """
+        thresholds = torch.sort(self.thresholds, dim=1)[0]  # Shape: (dim, num_thresholds)
+        
+        if training or not quantize_two_bit:
+            # Expand dimensions for broadcasting
+            embeddings_expanded = embeddings.unsqueeze(2)  # Shape: (batch_size, dim, 1)
+            thresholds_expanded = thresholds.unsqueeze(0)  # Shape: (1, dim, num_thresholds)
+            
+            # Compute logits with temperature
+            k = 1.0 / self.temperature
+            logits = k * (embeddings_expanded - thresholds_expanded)
+            
+            # Compute cumulative probabilities
+            cum_probs = torch.sigmoid(logits)  # Shape: (batch_size, dim, num_thresholds)
+            
+            # Calculate probabilities for each level
+            probs = torch.zeros(embeddings.shape[0], embeddings.shape[1], 
+                            2**self.quantization_bits, device=embeddings.device)
+            
+            # First level (0): all values below first threshold
+            probs[:, :, 0] = 1.0 - cum_probs[:, :, 0]
+            
+            # Middle levels: difference between consecutive cumulative probabilities
+            for i in range(1, 2**self.quantization_bits - 1):
+                probs[:, :, i] = cum_probs[:, :, i-1] - cum_probs[:, :, i]
+                
+            # Last level: all values above last threshold
+            probs[:, :, -1] = cum_probs[:, :, -1]
+            
+            # Ensure probabilities sum to 1
+            probs = probs / probs.sum(dim=2, keepdim=True)
+            
+            # Compute weighted sum
+            levels = torch.arange(2**self.quantization_bits, 
+                                dtype=torch.float32, 
+                                device=embeddings.device)
+            quantized_embeddings = torch.einsum('bdk,k->bd', probs, levels)
+            
+            
+            if training:
+                # Apply Straight-Through Estimator (STE)
+                quantized_levels = torch.round(quantized_embeddings)
+                quantized_embeddings = quantized_embeddings + (quantized_levels - quantized_embeddings).detach()
+            
+            
+        else:
+            # During inference, use hard thresholds
+            quantized_embeddings = torch.zeros_like(embeddings)
+            for level in range(2**self.quantization_bits):
+                if level == 0:
+                    mask = (embeddings <= thresholds[:, 0])
+                elif level == (2**self.quantization_bits - 1):
+                    mask = (embeddings > thresholds[:, -1])
+                else:
+                    mask = ((embeddings > thresholds[:, level-1]) & 
+                        (embeddings <= thresholds[:, level]))
+                quantized_embeddings[mask] = level
+                
+        return quantized_embeddings
   
     def expand_to_three_bits(self, quantized_embeddings: torch.Tensor) -> torch.Tensor:  
         """  
@@ -514,21 +661,34 @@ class QuantizationLayer(nn.Module):
         codes = codes.view(batch_size, dim * code_length)  
         return codes  
   
-    def anneal_temperature(self, current_epoch: int, total_epochs: int):  
-        """  
-        Anneal the temperature parameter over epochs.  
-  
+    def anneal_temperature(self, current_epoch: int, total_epochs: int, num_current_step: int, num_total_steps: int, steps_per_epoch: int):  
+        """
+        Anneal the temperature parameter over steps, stopping at the second-to-last epoch.
+        
         Args:  
             current_epoch (int): Current training epoch.  
             total_epochs (int): Total number of training epochs.  
+            num_current_step (int): Current step in the training process.  
+            num_total_steps (int): Total number of steps in the training process.  
+            steps_per_epoch (int): Number of steps per epoch.  
         """  
-        # Exponential decay of temperature  
-        progress = current_epoch / total_epochs  
-        # Calculate the annealing rate to reach min_temperature at the end  
-        annealing_rate = (self.min_temperature / self.initial_temperature) ** (1 / total_epochs)  
-        # Update temperature  
-        new_temperature = max(self.min_temperature, self.initial_temperature * (annealing_rate ** current_epoch))  
-        self.temperature.copy_(torch.tensor(new_temperature))  
+        # Stop annealing at second-to-last epoch
+        if current_epoch >= total_epochs - 1:
+            return  # Keep temperature unchanged for last epoch
+            
+        # Calculate steps until penultimate epoch
+        steps_until_penultimate = (total_epochs - 1) * steps_per_epoch
+        
+        # Calculate the annealing rate per step to reach min_temperature by penultimate epoch
+        step_annealing_rate = (self.min_temperature / self.initial_temperature) ** (1 / steps_until_penultimate)
+        
+        # Update temperature based on current step
+        new_temperature = max(
+            self.min_temperature, 
+            self.initial_temperature * (step_annealing_rate ** num_current_step)
+        )
+        
+        self.temperature.copy_(torch.tensor(new_temperature))
   
 def multi_scale_contrastive_loss(embeddings_dict: dict,  
                                  positive_pairs: torch.Tensor,  
@@ -590,7 +750,7 @@ def quantization_regularization_loss(embeddings_dict: dict,
         torch.Tensor: Scalar regularization loss.  
     """  
     reg_loss = 0.0  
-    progress = current_epoch / total_epochs  # Progress ratio (0 to 1)  
+    progress = (current_epoch + 1) / total_epochs  # Progress ratio (0 to 1)  
     weight = progress  # Increase weight over time  
     for emb in embeddings_dict.values():  
         if quantization_bits == 1:  
@@ -765,11 +925,14 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
         matryoshka_model.init_thresholds(sample_embeddings)  
   
     
+    num_current_step = 0
+    num_total_steps = num_epochs * len(dataloader)
     for epoch in range(num_epochs):  
         total_loss = 0.0  
         loss_dict = {}
         pbar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{num_epochs}')
-        for batch in pbar:  
+        for batch_idx, batch in enumerate(pbar):  
+            num_current_step += 1
             input_ids = batch['input_ids'].squeeze(1).to(device)  
             attention_mask = batch['attention_mask'].squeeze(1).to(device)  
             with torch.no_grad():  
@@ -824,15 +987,16 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
             # If training for quantization, add quantization regularization loss  
             if matryoshka_model.train_binary or matryoshka_model.train_two_bit:  
                 quantization_bits = 2 if matryoshka_model.train_two_bit else 1  
-                loss_quantization = quantization_regularization_loss(  
+                loss_quantization = 10 * reg_strength * quantization_regularization_loss(  
                     embeddings_dict, quantization_bits, epoch, num_epochs  
                 )  
                 loss_dict['quantization'] = loss_quantization.item()
-                loss += reg_strength * loss_quantization  
+                loss += loss_quantization  
                 
                 # Anneal temperatures in quantization layers  
-                for quant_layer in matryoshka_model.transformer.quantization_layers.values():  
-                    quant_layer.anneal_temperature(epoch, num_epochs)  
+                for dim, quant_layer in matryoshka_model.transformer.quantization_layers.items():  
+                    quant_layer.anneal_temperature(epoch, num_epochs, num_current_step, num_total_steps, len(dataloader))  
+                    quant_layer.update_thresholds(embeddings_dict[int(dim)])
             optimizer.zero_grad()  
             loss.backward()  
             # Add gradient clipping before optimizer step  

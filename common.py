@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from config import base_model_name, reg_strength, num_epochs, batch_size, temperature, max_samples_per_dataset
+from config import base_model_name, reg_strength, num_epochs, batch_size, temperature, max_samples_per_dataset, dimension_levels
 
 from dataset import CombinedSimilarityDataset
 from typing import List
@@ -15,6 +15,9 @@ import math
 
 import os  
 from datetime import datetime
+
+def get_dimension_levels(embedding_dim):
+    return [embedding_dim//level for level in dimension_levels]
 
 from dataclasses import dataclass, asdict
 @dataclass
