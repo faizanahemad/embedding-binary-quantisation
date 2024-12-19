@@ -1,7 +1,7 @@
 base_model_name = "jinaai/jina-embeddings-v3"# "", "sentence-transformers/all-MiniLM-L12-v2"
 base_model_name = "sentence-transformers/all-MiniLM-L12-v2"
 reg_strength = 0.002
-num_epochs = 6
+num_epochs = 3
 batch_size = 512
 lr = 0.001 # 0.001
 max_grad_norm = 1.0
@@ -33,8 +33,8 @@ train_modules = [
     # 'stage3', 
     # 'OneBitTwoBit',
     # 'Matryoshka',
-    'Matryoshka_2bit',
-    # 'Matryoshka_1bit',
+    # 'Matryoshka_2bit',
+    'Matryoshka_1bit',
     # 'Matryoshka_2bit_3bit',
     
 ] 
@@ -47,9 +47,9 @@ test_modules = [
     # 'OneBitTwoBit',
     
     # 'Matryoshka',
-    'Matryoshka_2bit',
+    # 'Matryoshka_2bit',
     'Matryoshka_1bit',
-    'Matryoshka_2bit_3bit',
+    # 'Matryoshka_2bit_3bit',
 ]
 save_dirs = [
     'run_20241201_1638', 
@@ -59,7 +59,7 @@ save_dirs = [
     'run_20241202_1422', 
     "run_20241216_1750",
     'run_20241218_1707', 
-    'run_20241218_1410',
+    'run_20241219_1053',
     'run_20241218_1707',
 ]
 

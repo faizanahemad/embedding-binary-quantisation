@@ -156,8 +156,8 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
             assert not torch.allclose(embeddings, baseline_embeddings, rtol=1e-3, atol=1e-5), "Transformed embeddings should be different from baseline embeddings"
   
         # If binary mode, convert embeddings to binary  
-        if self.do_binary:  
-            embeddings = (embeddings > 0.5).float()  
+        if self.do_binary and self.baseline:  
+            embeddings = (embeddings > 0.0).float()  
         elif self.do_two_bits:  
             # Quantize embeddings to 2 bits per dimension  
             embeddings = self.transformer.quantize_two_bits(embeddings, self.expand_two_bit_to_three_bits)  
@@ -212,6 +212,8 @@ class MatryoshkaTransformer(nn.Module):
         assert input_dim >= self.dimension_levels[-1], "Input dimension must be greater than or equal to the largest dimension level"  
         if input_dim > self.dimension_levels[-1]:  
             self.dimension_levels.append(input_dim)  
+            
+        assert input_dim == self.dimension_levels[-1], "Input dimension must be equal to the largest dimension level"
   
         
         
@@ -272,6 +274,12 @@ class MatryoshkaTransformer(nn.Module):
 
             self.blocks.append(block)  
   
+            # self.quantization_layer = QuantizationLayer(  
+            #         input_dim,  
+            #         quantization_bits=quant_bits,  
+            #         expand_two_bit_to_three_bits=self.expand_two_bit_to_three_bits  
+            #     )  
+            
             # Add quantization layer for this dimension level  
             if self.train_binary or self.train_two_bit:  
                 quant_bits = 2 if self.train_two_bit else 1  
@@ -325,7 +333,7 @@ class MatryoshkaTransformer(nn.Module):
                     quantize_two_bit=apply_two_bit  
                 )  
             elif apply_two_bit:
-                pass
+                all_embeddings = self.quantize_two_bits(all_embeddings, self.expand_two_bit_to_three_bits)
             elif apply_binary:
                 all_embeddings = (all_embeddings > 0.0).float()
             embeddings[dim] = all_embeddings  
@@ -452,44 +460,59 @@ class QuantizationLayer(nn.Module):
         }  
         return codebook  
   
-    def forward(self,  
-                x: torch.Tensor,  
-                training: bool = True,  
-                quantize_binary: bool = False,  
-                quantize_two_bit: bool = False) -> torch.Tensor:  
-        """  
-        Forward pass through the quantization layer.  
-  
-        Args:  
-            x (torch.Tensor): Input embeddings.  
-            training (bool): Indicates whether in training mode.  
-            quantize_binary (bool): Whether to quantize to 1-bit.  
-            quantize_two_bit (bool): Whether to quantize to 2-bits.  
-  
-        Returns:  
-            torch.Tensor: Quantized embeddings.  
-        """  
-        x = x * self.scale  # Learnable scaling  
-        if self.quantization_bits == 1:  
-            # 1-bit quantization logic  
-            x = x - self.thresholds.squeeze(-1)  # Subtract thresholds 
-            temperature = self.temperature.item()
-            x = x / temperature
+    def forward(self,
+                x: torch.Tensor,
+                training: bool = True,
+                quantize_binary: bool = False,
+                quantize_two_bit: bool = False) -> torch.Tensor:
+        """
+        Forward pass through the quantization layer.
+        For 1-bit quantization:
+        - Level 0: x ≤ t1
+        - Level 1: x > t1
+        
+        Args:
+            x (torch.Tensor): Input embeddings.
+            training (bool): Indicates whether in training mode.
+            quantize_binary (bool): Whether to quantize to 1-bit.
+            quantize_two_bit (bool): Whether to quantize to 2-bits.
+        
+        Returns:
+            torch.Tensor: Quantized embeddings.
+        """
+        x = x * self.scale  # Learnable scaling
+        
+        if self.quantization_bits == 1:
+            # Get single threshold for 1-bit quantization
+            threshold = self.thresholds.squeeze(-1)  # Shape: (dim,)
+            assert threshold.dim() == 1, "Expected 1D threshold tensor for 1-bit quantization"
             
-            if training:  
-                x = torch.sigmoid(x)   
-                # Apply Straight-Through Estimator (STE)  
-                binary_x = (x > 0.5).float()  
-                x = x + (binary_x - x).detach()  
-            elif quantize_binary:  
-                x = (x > 0.0).float()  
+            if training:
+                with torch.no_grad():
+                    # Forward pass: hard assignments
+                    quantized = torch.zeros_like(x)
+                    mask_1 = (x > threshold)
+                    quantized[mask_1] = 1.0
+                
+                # Custom straight-through gradient estimation
+                grad_mask = (x > threshold).float()
+                
+                # Combine hard assignments with differentiable gradient path
+                x = quantized.detach() + (grad_mask - grad_mask.detach())
+                
+            elif quantize_binary:
+                # During inference with binary quantization
+                x = (x > threshold).float()
             else:
-                x = torch.sigmoid(x)   
-        elif self.quantization_bits == 2:  
-            # 2-bit quantization logic  
-            x = self.multi_bit_quantization(x, training, quantize_two_bit)  
-        return x  
-    
+                # During inference without quantization (optional)
+                x = (x - threshold)
+                
+        elif self.quantization_bits == 2:
+            # 2-bit quantization logic
+            x = self.multi_bit_quantization(x, training, quantize_two_bit)
+            
+        return x
+        
     
     def multi_bit_quantization(self, embeddings: torch.Tensor, training: bool = True, quantize_two_bit: bool = True) -> torch.Tensor:
         """
@@ -734,17 +757,20 @@ def multi_scale_contrastive_loss(embeddings_dict: dict,
     return total_loss  
   
 def quantization_regularization_loss(embeddings_dict: dict,  
-                                     quantization_bits: int,  
-                                     current_epoch: int,  
-                                     total_epochs: int) -> torch.Tensor:  
+                                   quantization_bits: int,  
+                                   current_epoch: int,  
+                                   total_epochs: int,
+                                   thresholds: dict) -> torch.Tensor:  
     """  
-    Compute regularization loss to encourage quantized outputs.  
+    Compute regularization loss to encourage values to be far from thresholds
+    and close to quantization levels.
   
     Args:  
         embeddings_dict (dict): Dictionary of embeddings at different dimensions.  
         quantization_bits (int): Number of bits used for quantization (1 or 2).  
         current_epoch (int): Current training epoch.  
         total_epochs (int): Total number of training epochs.  
+        thresholds (torch.Tensor): Quantization thresholds.
   
     Returns:  
         torch.Tensor: Scalar regularization loss.  
@@ -752,30 +778,53 @@ def quantization_regularization_loss(embeddings_dict: dict,
     reg_loss = 0.0  
     progress = (current_epoch + 1) / total_epochs  # Progress ratio (0 to 1)  
     weight = progress  # Increase weight over time  
-    for emb in embeddings_dict.values():  
-        if quantization_bits == 1:  
-            # Binary quantization regularization
-            normalized_emb = torch.sigmoid(emb)
+    
+    dims = sorted(embeddings_dict.keys())
+    
+    for dim in dims:
+        emb = embeddings_dict[dim]
+        threshold = thresholds[dim]
+        if quantization_bits == 1:
+            # Get threshold for each dimension
+            threshold = threshold.squeeze(-1)  # Shape: (dim,)
             
-            # Binary entropy loss to push values away from 0.5 towards 0 or 1
-            binary_entropy = -(normalized_emb * torch.log(normalized_emb + 1e-10) + 
-                             (1 - normalized_emb) * torch.log(1 - normalized_emb + 1e-10))
+            # Compute distance from threshold
+            distance_from_threshold = torch.abs(emb - threshold.unsqueeze(0))
             
-            # Additional distance loss to push values towards extremes
-            distance_loss = torch.min(
-                torch.abs(normalized_emb), 
-                torch.abs(1 - normalized_emb)
+            # We want values to be far from threshold (maximize distance)
+            threshold_repulsion = torch.exp(-distance_from_threshold).mean()
+            
+            # We also want values to be close to 0 or 1
+            distance_to_levels = torch.minimum(
+                torch.abs(emb), 
+                torch.abs(emb - 1.0)
             ).mean()
             
-            reg_loss += weight * (binary_entropy.mean() + distance_loss)
+            reg_loss += weight * (threshold_repulsion + distance_to_levels)
             
-        elif quantization_bits == 2:  
-            # Multi-bit quantization regularization  
-            # Encourage embeddings to be close to integer levels  
-            levels = torch.round(emb)  
-            mse_loss = F.mse_loss(emb, levels)  
-            reg_loss += weight * mse_loss  
-    return reg_loss  
+        elif quantization_bits == 2:
+            # For 2-bit quantization (4 levels: 0,1,2,3)
+            
+            # Distance from thresholds
+            distances = []
+            for i in range(thresholds.shape[1]):
+                threshold = thresholds[:, i].unsqueeze(0)
+                distance = torch.abs(emb - threshold)
+                distances.append(distance)
+            distances = torch.stack(distances, dim=-1)
+            
+            # Minimum distance to any threshold (we want this to be large)
+            min_threshold_distance = distances.min(dim=-1)[0]
+            threshold_repulsion = torch.exp(-min_threshold_distance).mean()
+            
+            # Distance to nearest quantization level
+            levels = torch.tensor([0., 1., 2., 3.], device=emb.device)
+            level_distances = torch.abs(emb.unsqueeze(-1) - levels)
+            distance_to_nearest_level = level_distances.min(dim=-1)[0].mean()
+            
+            reg_loss += weight * (threshold_repulsion + distance_to_nearest_level)
+    
+    return reg_loss
 
 
 def kl_divergence(embeddings_original: torch.Tensor, embeddings_new: torch.Tensor) -> torch.Tensor:
@@ -987,12 +1036,19 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
             # If training for quantization, add quantization regularization loss  
             if matryoshka_model.train_binary or matryoshka_model.train_two_bit:  
                 quantization_bits = 2 if matryoshka_model.train_two_bit else 1  
-                loss_quantization = 10 * reg_strength * quantization_regularization_loss(  
-                    embeddings_dict, quantization_bits, epoch, num_epochs  
-                )  
-                loss_dict['quantization'] = loss_quantization.item()
-                loss += loss_quantization  
-                
+                thresholds = {}
+                for dim, emb in embeddings_dict.items():  
+                    thresholds[dim] = matryoshka_model.transformer.quantization_layers[str(dim)].thresholds
+                cur_quant_loss = quantization_regularization_loss(
+                    embeddings_dict,
+                    quantization_bits=quantization_bits,
+                    current_epoch=epoch,
+                    total_epochs=num_epochs,
+                    thresholds=thresholds
+                )
+                quant_loss = cur_quant_loss
+                loss += quant_loss
+                loss_dict['quantization'] = quant_loss.item()
                 # Anneal temperatures in quantization layers  
                 for dim, quant_layer in matryoshka_model.transformer.quantization_layers.items():  
                     quant_layer.anneal_temperature(epoch, num_epochs, num_current_step, num_total_steps, len(dataloader))  

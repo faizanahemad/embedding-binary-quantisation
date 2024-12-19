@@ -577,10 +577,10 @@ def similarity_preservation_loss(original_embeddings, quantized_embeddings):
         loss (torch.Tensor): Scalar loss value  
     """  
     # Normalize embeddings  
-    # original_norm = F.normalize(original_embeddings, dim=1)  
-    # quantized_norm = F.normalize(quantized_embeddings, dim=1)  
-    original_norm = original_embeddings
-    quantized_norm = quantized_embeddings
+    original_norm = F.normalize(original_embeddings, dim=1)  
+    quantized_norm = F.normalize(quantized_embeddings, dim=1)  
+    # original_norm = original_embeddings
+    # quantized_norm = quantized_embeddings
   
     # Compute similarity matrices  
     sim_original = torch.matmul(original_norm, original_norm.t())  # Shape: (batch_size, batch_size)  
