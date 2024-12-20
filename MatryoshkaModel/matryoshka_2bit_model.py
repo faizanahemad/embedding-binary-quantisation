@@ -144,15 +144,17 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
         baseline_embeddings = base_embeddings[:,:output_dim]
         if self.baseline:
             embeddings = baseline_embeddings
+            non_quant_embeddings = baseline_embeddings
         else:
             self.transformer.eval()  
             with torch.no_grad():  
-                matryoshka_embeddings = self.transformer(  
+                matryoshka_embeddings, non_quant_embeddings = self.transformer(  
                     base_embeddings,  
                     apply_binary=self.do_binary,  
                     apply_two_bit=self.do_two_bits  
                 )  
                 embeddings = matryoshka_embeddings[output_dim]  
+                non_quant_embeddings = non_quant_embeddings[output_dim]
             assert not torch.allclose(embeddings, baseline_embeddings, rtol=1e-3, atol=1e-5), "Transformed embeddings should be different from baseline embeddings"
   
         # If binary mode, convert embeddings to binary  
@@ -306,6 +308,7 @@ class MatryoshkaTransformer(nn.Module):
             dict: Dictionary of embeddings at each dimension level.  
         """  
         embeddings = {}  
+        non_quant_embeddings = {}
         x = self.base_transform(x)  
         prev_embedding = None  
         all_embeddings = x  
@@ -322,7 +325,7 @@ class MatryoshkaTransformer(nn.Module):
   
             # Normalize embeddings before quantization  
             all_embeddings = F.normalize(all_embeddings, p=2, dim=1)  
-  
+            non_quant_embeddings[dim] = all_embeddings
             # Apply quantization layer if required  
             if self.train_binary or self.train_two_bit:  
                 quant_layer = self.quantization_layers[str(dim)]  
@@ -333,7 +336,8 @@ class MatryoshkaTransformer(nn.Module):
                     quantize_two_bit=apply_two_bit  
                 )  
             elif apply_two_bit:
-                all_embeddings = self.quantize_two_bits(all_embeddings, self.expand_two_bit_to_three_bits)
+                raise NotImplementedError("Two bit quantization is not supported without training")
+                # all_embeddings = self.quantize_two_bits(all_embeddings, self.expand_two_bit_to_three_bits)
             elif apply_binary:
                 all_embeddings = (all_embeddings > 0.0).float()
             embeddings[dim] = all_embeddings  
@@ -341,7 +345,7 @@ class MatryoshkaTransformer(nn.Module):
         embeddings_dict = {}  
         for dim, emb in embeddings.items():  
             embeddings_dict[dim] = emb  
-        return embeddings_dict  
+        return embeddings_dict, non_quant_embeddings
   
     def quantize_two_bits(self, embeddings: torch.Tensor, expand_to_three_bits: bool = False) -> torch.Tensor:  
         """  
@@ -390,11 +394,14 @@ class QuantizationLayer(nn.Module):
         self.min_temperature = min_temperature  
         self.expand_two_bit_to_three_bits = expand_two_bit_to_three_bits  
         self.annealing_rate = annealing_rate  
-        self.scale = nn.Parameter(torch.ones(dim))  
+        
         self.initial_temperature = initial_temperature
   
         # Initialize thresholds for multi-bit quantization  
-        self.thresholds = nn.Parameter(torch.zeros(dim, self.num_thresholds()))  
+        self.register_buffer('thresholds', torch.zeros(dim, self.num_thresholds()))  
+        
+        # store the 0 percentile and 100 percentile thresholds
+        self.register_buffer('thresholds_0_100', torch.zeros(dim, 2))
   
         # Codebook for expanding 2-bit codes to 3 bits  
         if self.quantization_bits == 2 and self.expand_two_bit_to_three_bits:  
@@ -414,13 +421,18 @@ class QuantizationLayer(nn.Module):
         Calculate thresholds based on sample embeddings.
         """
         quantiles = torch.linspace(0, 1, self.num_thresholds() + 2, device=sample_embeddings.device)[1:-1]
+        full_range_quantiles = torch.tensor([0.0, 1.0], device=sample_embeddings.device)
+        
         thresholds = []
+        thresholds_0_100 = []
         for d in range(self.dim):
             values = sample_embeddings[:, d]
             percentiles = torch.quantile(values, quantiles)
             thresholds.append(percentiles)
+            thresholds_0_100.append(torch.quantile(values, full_range_quantiles))
         thresholds = torch.stack(thresholds)
-        return thresholds
+        thresholds_0_100 = torch.stack(thresholds_0_100)
+        return thresholds, thresholds_0_100
   
     def initialize_thresholds(self, sample_embeddings: torch.Tensor):  
         """  
@@ -429,8 +441,9 @@ class QuantizationLayer(nn.Module):
         Args:  
             sample_embeddings (torch.Tensor): Sample embeddings, shape (num_samples, dim).  
         """  
-        thresholds = self.calculate_thresholds(sample_embeddings)
+        thresholds, full_range_thresholds = self.calculate_thresholds(sample_embeddings)
         self.thresholds.data = thresholds.to(self.thresholds.device)  
+        self.thresholds_0_100.data = full_range_thresholds.to(self.thresholds_0_100.device)
         
         
     def update_thresholds(self, batch_embeddings: torch.Tensor):
@@ -441,9 +454,10 @@ class QuantizationLayer(nn.Module):
         Args:
             batch_embeddings (torch.Tensor): Current batch embeddings.
         """
-        thresholds = self.calculate_thresholds(batch_embeddings)
+        thresholds, full_range_thresholds = self.calculate_thresholds(batch_embeddings)
         momentum = 0.995
         self.thresholds.data = momentum * self.thresholds.data + (1 - momentum) * thresholds.to(self.thresholds.device)  
+        self.thresholds_0_100.data = momentum * self.thresholds_0_100.data + (1 - momentum) * full_range_thresholds.to(self.thresholds_0_100.device)
   
     def create_codebook(self) -> dict:  
         """  
@@ -480,7 +494,7 @@ class QuantizationLayer(nn.Module):
         Returns:
             torch.Tensor: Quantized embeddings.
         """
-        x = x * self.scale  # Learnable scaling
+        orig_x = x
         
         if self.quantization_bits == 1:
             # Get single threshold for 1-bit quantization
@@ -590,7 +604,7 @@ class QuantizationLayer(nn.Module):
             if quantize_two_bit:
                 pass
             else:
-                quantized = (quantized + embeddings)/2
+                quantized = embeddings
         
         return quantized
   
@@ -696,11 +710,12 @@ class QuantizationLayer(nn.Module):
             steps_per_epoch (int): Number of steps per epoch.  
         """  
         # Stop annealing at second-to-last epoch
-        if current_epoch >= total_epochs - 1:
-            return  # Keep temperature unchanged for last epoch
+        steps_remaining = num_total_steps - num_current_step
+        if steps_remaining <= 100:
+            return
             
         # Calculate steps until penultimate epoch
-        steps_until_penultimate = (total_epochs - 1) * steps_per_epoch
+        steps_until_penultimate = num_total_steps - 100
         
         # Calculate the annealing rate per step to reach min_temperature by penultimate epoch
         step_annealing_rate = (self.min_temperature / self.initial_temperature) ** (1 / steps_until_penultimate)
@@ -755,12 +770,39 @@ def multi_scale_contrastive_loss(embeddings_dict: dict,
         loss = F.cross_entropy(similarity_matrix / temperature, labels, reduction='mean')  
         total_loss += weights[dim] * loss  
     return total_loss  
+
+
+def increase_std_dev_over_time_loss(embeddings_dict: dict,  
+                                   current_epoch: int,  
+                                   total_epochs: int,
+                                   num_current_step: int,
+                                   num_total_steps: int,
+                                   num_steps_per_epoch: int) -> dict:
+    """
+    Increase the standard deviation of embeddings over time.
+    """
+    progress = max(0.2, (np.exp(num_current_step / num_total_steps) - 1) / (np.e - 1))  # Progress ratio (0 to 1)
+    weight = progress  # Increase weight over time  
+    overall_loss = 0.0
+    for dim in embeddings_dict:
+        emb = embeddings_dict[dim] # emb shape (batch_size, dim)
+        # calculate std dev of each dimension
+        std_dev = torch.std(emb, dim=0)
+        # calculate loss as the sum of std devs
+        overall_std_dev = std_dev.mean()
+        loss = torch.exp(-overall_std_dev)
+        overall_loss += loss.sum()
+    return weight * overall_loss
   
 def quantization_regularization_loss(embeddings_dict: dict,  
                                    quantization_bits: int,  
                                    current_epoch: int,  
                                    total_epochs: int,
-                                   thresholds: dict) -> torch.Tensor:  
+                                   num_current_step: int,
+                                   num_total_steps: int,
+                                   num_steps_per_epoch: int,
+                                   thresholds: dict, 
+                                   thresholds_0_100: dict) -> torch.Tensor:  
     """  
     Compute regularization loss to encourage values to be far from thresholds
     and close to quantization levels.
@@ -776,14 +818,15 @@ def quantization_regularization_loss(embeddings_dict: dict,
         torch.Tensor: Scalar regularization loss.  
     """  
     reg_loss = 0.0  
-    progress = (current_epoch + 1) / total_epochs  # Progress ratio (0 to 1)  
+    progress = max(0.2, (np.exp(num_current_step / num_total_steps) - 1) / (np.e - 1))  # Progress ratio (0 to 1)
     weight = progress  # Increase weight over time  
     
     dims = sorted(embeddings_dict.keys())
     
     for dim in dims:
         emb = embeddings_dict[dim]
-        threshold = thresholds[dim]
+        threshold = thresholds[dim] # shape (dim, 1)
+        threshold_0_100 = thresholds_0_100[dim] # shape (dim, 2)
         if quantization_bits == 1:
             # Get threshold for each dimension
             threshold = threshold.squeeze(-1)  # Shape: (dim,)
@@ -794,21 +837,51 @@ def quantization_regularization_loss(embeddings_dict: dict,
             # We want values to be far from threshold (maximize distance)
             threshold_repulsion = torch.exp(-distance_from_threshold).mean()
             
+            # emb must be greater than threshold_0_100[:, 0]
+            # emb must be less than threshold_0_100[:, 1]
+            # Common range enforcement loss for both 1-bit and 2-bit cases
+            # Only penalize values outside the valid range
+            lower_bound = threshold_0_100[:, 0].unsqueeze(0)  # shape (1, dim)
+            upper_bound = threshold_0_100[:, 1].unsqueeze(0)  # shape (1, dim)
+            
+            # ReLU ensures we only penalize violations
+            lower_bound_violation = torch.relu(lower_bound - emb)  # Penalize if emb < lower_bound
+            upper_bound_violation = torch.relu(emb - upper_bound)  # Penalize if emb > upper_bound
+            range_violation_loss = (lower_bound_violation.pow(2) + upper_bound_violation.pow(2)).mean()
+        
+            
             # We also want values to be close to 0 or 1
-            distance_to_levels = torch.minimum(
+            distance_to_levels = (torch.minimum(
                 torch.abs(emb), 
                 torch.abs(emb - 1.0)
-            ).mean()
+            ) ** 2).mean()
             
-            reg_loss += weight * (threshold_repulsion + distance_to_levels)
+            reg_loss += weight * (threshold_repulsion)
             
         elif quantization_bits == 2:
             # For 2-bit quantization (4 levels: 0,1,2,3)
             
             # Distance from thresholds
+            cur_thresholds = thresholds[dim] # shape (dim, 3)
+            cur_thresholds_0_100 = thresholds_0_100[dim] # shape (dim, 2)
+            
+            # emb must be greater than threshold_0_100[:, 0]
+            # emb must be less than threshold_0_100[:, 1]
+            # add loss for this in the for loop below and ahead with proper distances which ensure that the embedding is in between 0 to 100 percentile and only penalize if it is not
+            
+            # Range enforcement loss - same as 1-bit case
+            lower_bound = threshold_0_100[:, 0].unsqueeze(0)  # shape (1, dim)
+            upper_bound = threshold_0_100[:, 1].unsqueeze(0)  # shape (1, dim)
+            
+            # ReLU ensures we only penalize violations
+            lower_bound_violation = torch.relu(lower_bound - emb)  # Penalize if emb < lower_bound
+            upper_bound_violation = torch.relu(emb - upper_bound)  # Penalize if emb > upper_bound
+            range_violation_loss = (lower_bound_violation.pow(2) + upper_bound_violation.pow(2)).mean()
+            
+            
             distances = []
-            for i in range(thresholds.shape[1]):
-                threshold = thresholds[:, i].unsqueeze(0)
+            for i in range(cur_thresholds.shape[1]):
+                threshold = cur_thresholds[:, i].unsqueeze(0)
                 distance = torch.abs(emb - threshold)
                 distances.append(distance)
             distances = torch.stack(distances, dim=-1)
@@ -820,48 +893,13 @@ def quantization_regularization_loss(embeddings_dict: dict,
             # Distance to nearest quantization level
             levels = torch.tensor([0., 1., 2., 3.], device=emb.device)
             level_distances = torch.abs(emb.unsqueeze(-1) - levels)
-            distance_to_nearest_level = level_distances.min(dim=-1)[0].mean()
+            distance_to_nearest_level = (level_distances.min(dim=-1)[0] ** 2).mean()
             
-            reg_loss += weight * (threshold_repulsion + distance_to_nearest_level)
+            reg_loss += weight * (threshold_repulsion)
     
     return reg_loss
 
 
-def kl_divergence(embeddings_original: torch.Tensor, embeddings_new: torch.Tensor) -> torch.Tensor:
-    """
-    Compute symmetric KL divergence (Jensen-Shannon Divergence) between original and new embeddings.
-    
-    Args:
-        embeddings_original (torch.Tensor): Original embeddings
-        embeddings_new (torch.Tensor): New embeddings
-        
-    Returns:
-        torch.Tensor: Mean JSD value
-    """
-    # Convert embeddings to probability distributions using softmax
-    prob_original = F.softmax(embeddings_original, dim=-1)
-    prob_new = F.softmax(embeddings_new, dim=-1)
-    
-    # Compute KL divergence in both directions
-    # Note: kl_div expects log probabilities as first argument
-    kl_div = F.kl_div(
-        prob_original.log(), 
-        prob_new,
-        reduction='batchmean',
-        log_target=False
-    )
-    
-    kl_div_2 = F.kl_div(
-        prob_new.log(),
-        prob_original,
-        reduction='batchmean',
-        log_target=False
-    )
-    
-    # Compute Jensen-Shannon Divergence
-    jsd = 0.5 * (kl_div + kl_div_2)
-    
-    return jsd
   
 def orthogonality_regularization(embeddings_dict: dict) -> torch.Tensor:  
     """  
@@ -882,11 +920,33 @@ def orthogonality_regularization(embeddings_dict: dict) -> torch.Tensor:
         emb_curr = embeddings_dict[dim_curr]  # Shape: (batch_size, dim_curr)  
         # Extract the new dimensions added in emb_curr  
         delta = emb_curr[:, dim_prev:]  # Shape: (batch_size, dim_curr - dim_prev)  
+        # normalize delta and emb_prev
+        delta = F.normalize(delta, p=2, dim=1)
+        emb_prev = F.normalize(emb_prev, p=2, dim=1)
         # Compute the dot product between delta and emb_prev  
         dot_product = torch.matmul(delta.T, emb_prev)  # Shape: (dim_curr - dim_prev, dim_prev)  
         # Compute Frobenius norm of the dot product matrix  
         reg_loss += torch.norm(dot_product, p='fro')  
     return reg_loss  
+
+
+def information_bottleneck_operator(embeddings_dict: dict) -> dict:  
+    """  
+    Compute information bottleneck operator to focus critical information in lower dimensions.  
+    """  
+    dimensions = sorted(embeddings_dict.keys())  
+    new_embeddings_dict = {}
+    for idx, dim in enumerate(dimensions, 1):  
+        emb = embeddings_dict[dim] 
+        norm_before = torch.norm(emb, p=2, dim=1, keepdim=True)
+        # as the dimension increases within the emb, the vector is multiplied by a linspace from 1 to 0, so the higher dimensions are multiplied by a smaller number
+        multiplier = torch.linspace(1, 1/idx, emb.shape[1], device=emb.device)
+        emb = emb * multiplier
+        norm_after = torch.norm(emb, p=2, dim=1, keepdim=True)
+        # bring each row to the same norm
+        emb = emb * (norm_before / norm_after)
+        new_embeddings_dict[dim] = emb
+    return new_embeddings_dict
   
 def information_bottleneck_regularization(embeddings_dict: dict) -> torch.Tensor:  
     """  
@@ -929,8 +989,7 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
                            dataloader,  
                            num_epochs: int = 5,  
                            learning_rate: float = 1e-4,  
-                           temperature: float = 0.07,  
-                           reg_strength: float = 1e-3):  
+                           temperature: float = 0.07):  
     """  
     Train the Matryoshka Embedding Model.  
   
@@ -994,7 +1053,7 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
                 embeddings = F.normalize(embeddings, p=2, dim=1)  
             embeddings = embeddings.to(device)  
             # Forward pass through transformer  
-            embeddings_dict = matryoshka_model.transformer(embeddings)  
+            embeddings_dict, non_quant_embeddings = matryoshka_model.transformer(embeddings)  
             batch_size = embeddings.size(0)  
             positive_pairs = torch.arange(0, batch_size, device=device).view(-1, 2)  
             # Compute losses 
@@ -1002,59 +1061,72 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
             #     embeddings_dict, positive_pairs, temperature=temperature  
             # )  
             # loss_dict['contrastive'] = loss_contrastive.item()
-            loss_ortho = 0.01 * orthogonality_regularization(embeddings_dict)  
+            loss_ortho = 0.01 * orthogonality_regularization(non_quant_embeddings)  
             loss_dict['ortho'] = loss_ortho.item()
-            loss_info_bottleneck = information_bottleneck_regularization(embeddings_dict)  
-            loss_dict['info_bottleneck'] = loss_info_bottleneck.item()
+            loss_info_bottleneck = information_bottleneck_regularization(non_quant_embeddings)
+            loss_dict['info_bottleneck'] = float(loss_info_bottleneck)
             loss_similarity = 0.0  
             loss_kl_similarity = 0.0
             overall_contrastive_loss = 0.0
             dimension_levels = sorted(embeddings_dict.keys())  
             overall_rank_loss = 0.0
             scale_factor = (max(dimension_levels) / min(dimension_levels)) / np.sqrt(max(dimension_levels))
-            for dim, emb in embeddings_dict.items():  
-                weight_small_dim = 1.0 / (dim / min(dimension_levels))  
+            bottleneck_operator_embeddings_dict = information_bottleneck_operator(non_quant_embeddings)
+            for dim, _ in bottleneck_operator_embeddings_dict.items():  
+                non_quant_emb = non_quant_embeddings[dim]
+                quant_emb = embeddings_dict[dim]
+                bottleneck_emb = bottleneck_operator_embeddings_dict[dim]
                 weight_large_dim = scale_factor * np.sqrt(dim)
-                loss_similarity += weight_large_dim * similarity_preservation_loss(embeddings, emb)  
-                loss_kl_similarity += weight_large_dim * kl_similarity_preservation_loss(embeddings, emb)
-                contrastive_loss_per_dim = weight_large_dim * 0.01 * contrastive_loss(emb)
-                overall_contrastive_loss += contrastive_loss_per_dim
-                overall_rank_loss += weight_large_dim * rank_preserving_loss(embeddings, emb)
+                
+                emb = bottleneck_emb if use_information_bottleneck else non_quant_emb
+                
+                loss_similarity += (weight_large_dim * similarity_preservation_loss(embeddings, quant_emb)  + weight_large_dim * similarity_preservation_loss(embeddings, emb))
+                loss_kl_similarity += (weight_large_dim * kl_similarity_preservation_loss(embeddings, quant_emb) + weight_large_dim * kl_similarity_preservation_loss(embeddings, emb))
+                overall_contrastive_loss += weight_large_dim * 0.01 * contrastive_loss(quant_emb) + weight_large_dim * 0.01 * contrastive_loss(emb)
+                overall_rank_loss += weight_large_dim * rank_preserving_loss(embeddings, quant_emb) + weight_large_dim * rank_preserving_loss(embeddings, emb)
                 
             highest_dim = max(dimension_levels)
             embeddings_new = embeddings_dict[highest_dim]
             embeddings_original = embeddings
-            # loss_kl = kl_divergence(embeddings_original, embeddings_new)
-            # loss_dict['kl'] = loss_kl.item()
-            loss = loss_similarity + loss_kl_similarity + overall_rank_loss + overall_contrastive_loss # + reg_strength * loss_info_bottleneck # + reg_strength * loss_ortho + # + loss_kl
+            
+            loss = loss_similarity + loss_kl_similarity + overall_rank_loss + overall_contrastive_loss + (( reg_strength * loss_info_bottleneck ) if use_information_bottleneck_regularization else 0.0) + ((reg_strength * loss_ortho) if use_orthogonality_regularization else 0.0)
             # loss = overall_contrastive_loss
             loss_dict['similarity'] = loss_similarity.item()
             loss_dict['kl_similarity'] = loss_kl_similarity.item()
-            loss_dict['total'] = loss.item()
+            
             loss_dict['contrastive'] = overall_contrastive_loss.item()
             loss_dict['rank'] = overall_rank_loss.item()
             # If training for quantization, add quantization regularization loss  
             if matryoshka_model.train_binary or matryoshka_model.train_two_bit:  
                 quantization_bits = 2 if matryoshka_model.train_two_bit else 1  
                 thresholds = {}
+                thresholds_0_100 = {}
                 for dim, emb in embeddings_dict.items():  
                     thresholds[dim] = matryoshka_model.transformer.quantization_layers[str(dim)].thresholds
-                cur_quant_loss = quantization_regularization_loss(
-                    embeddings_dict,
+                    thresholds_0_100[dim] = matryoshka_model.transformer.quantization_layers[str(dim)].thresholds_0_100
+                cur_quant_loss = reg_strength * quantization_regularization_loss(
+                    non_quant_embeddings,
                     quantization_bits=quantization_bits,
                     current_epoch=epoch,
                     total_epochs=num_epochs,
-                    thresholds=thresholds
+                    num_current_step=num_current_step,
+                    num_total_steps=num_total_steps,
+                    num_steps_per_epoch=len(dataloader),
+                    thresholds=thresholds,
+                    thresholds_0_100=thresholds_0_100
                 )
-                quant_loss = cur_quant_loss
+                cur_increase_std_dev_loss = reg_strength * increase_std_dev_over_time_loss(non_quant_embeddings, epoch, num_epochs, num_current_step, num_total_steps, len(dataloader))
+                quant_loss = ((cur_quant_loss if quantization_regularization else 0.0 )+ (cur_increase_std_dev_loss if increase_std_dev_over_time else 0.0))
                 loss += quant_loss
-                loss_dict['quantization'] = quant_loss.item()
+                loss_dict['quantization'] = cur_quant_loss.item()
+                loss_dict['std_dev'] = float(cur_increase_std_dev_loss)
                 # Anneal temperatures in quantization layers  
                 for dim, quant_layer in matryoshka_model.transformer.quantization_layers.items():  
                     quant_layer.anneal_temperature(epoch, num_epochs, num_current_step, num_total_steps, len(dataloader))  
                     quant_layer.update_thresholds(embeddings_dict[int(dim)])
             optimizer.zero_grad()  
             loss.backward()  
+            loss_dict['total'] = loss.item()
             # Add gradient clipping before optimizer step  
             nn.utils.clip_grad_norm_(matryoshka_model.transformer.parameters(), max_grad_norm)  
             optimizer.step()  

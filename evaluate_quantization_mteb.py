@@ -570,6 +570,9 @@ def main():
 
     results_dir = 'mteb_evaluation_results'
     os.makedirs(results_dir, exist_ok=True)
+    
+    results_dir = 'mteb_evaluation_results/folder-' + datetime.now().strftime("%Y%m%d_%H%M")
+    os.makedirs(results_dir, exist_ok=True)
 
     # Initialize the original embedding model
     original_model_name = base_model_name

@@ -789,7 +789,7 @@ class PairwiseShuffleSampler(torch.utils.data.Sampler):
     def __len__(self):
         return len(self.data_source)
 
-def get_dataloader(base_model_name, batch_size, num_workers=4, persistent_workers=True, prefetch_factor=2):
+def get_dataloader(base_model_name, batch_size, num_workers=8, persistent_workers=True, prefetch_factor=2):
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
     dataset = CombinedSimilarityDataset(tokenizer, max_length=256, max_samples_per_dataset=max_samples_per_dataset)
     print(f"Train Dataset size: {len(dataset)}")
@@ -809,7 +809,7 @@ def get_dataloader(base_model_name, batch_size, num_workers=4, persistent_worker
     return dataloader
 
 
-def get_dataloader(base_model_name, batch_size, num_workers=4, persistent_workers=True, prefetch_factor=2):
+def get_dataloader(base_model_name, batch_size, num_workers=8, persistent_workers=True, prefetch_factor=2):
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
     dataset = CombinedSimilarityDataset(tokenizer, max_length=256, max_samples_per_dataset=max_samples_per_dataset)
     print(f"Train Dataset size: {len(dataset)}")
