@@ -565,6 +565,27 @@ def save_quantization_module(model, save_dir, model_name):
     print(f'Model saved to {model_path}')  
     
     
+def compute_symmetric_kl(x, y):
+    kl_orig_quant = F.kl_div(
+        y.log(), 
+        x, 
+        reduction='batchmean',
+        log_target=False
+    )
+    
+    kl_quant_orig = F.kl_div(
+        x.log(), 
+        y, 
+        reduction='batchmean',
+        log_target=False
+    )
+    
+    # Average the two KL divergences
+    symmetric_kl = (kl_orig_quant + kl_quant_orig) / 2
+    
+    return symmetric_kl
+    
+    
 def similarity_preservation_loss(original_embeddings, quantized_embeddings):  
     """  
     Compute the loss to preserve similarity relationships.  
@@ -588,8 +609,33 @@ def similarity_preservation_loss(original_embeddings, quantized_embeddings):
   
     # Compute Mean Squared Error between similarity matrices  
     loss = F.mse_loss(sim_quantized, sim_original)  
+    
+    # Get min value per row for each matrix
+    # sim_original.min(dim=1)[0] correctly gives the minimum value per row for a batch_size x batch_size matrix
+    # min_per_row_original = sim_original.min(dim=1)[0]  # Shape: (batch_size,)
+    # min_per_row_quantized = sim_quantized.min(dim=1)[0]  # Shape: (batch_size,)
+    
+    # # Get row-wise minimum between the two mins
+    # row_min = torch.minimum(min_per_row_original, min_per_row_quantized)  # Shape: (batch_size,)
+    
+    # # Add the row minimums to each corresponding row of both matrices
+    # # If row_min is -3, then -row_min is 3, so ReLU(-row_min) will be 3
+    # # We add this positive value plus epsilon to make values suitable for KL
+    # epsilon = 1e-8
+    # positive_adjustment = F.relu(-row_min) + epsilon  # Will be 0+eps for positive values, |negative|+eps for negative values
+    # sim_original = sim_original + positive_adjustment.unsqueeze(1)  # Broadcasting across columns
+    # sim_quantized = sim_quantized + positive_adjustment.unsqueeze(1)  # Broadcasting across columns
+    
+    # # Divide each row by the sum of the row
+    # max_sum = torch.max(torch.max(sim_original, dim=1, keepdim=True)[0], torch.max(sim_quantized, dim=1, keepdim=True)[0])
+    # sim_original = sim_original / max_sum
+    # sim_quantized = sim_quantized / max_sum
+    
+    # symmetric_kl = compute_symmetric_kl(sim_original, sim_quantized)
   
-    return loss  
+    return loss # + symmetric_kl
+
+
 
 
 def kl_similarity_preservation_loss(original_embeddings, quantized_embeddings, eps=1e-8, temperature=0.1):
@@ -627,25 +673,11 @@ def kl_similarity_preservation_loss(original_embeddings, quantized_embeddings, e
     sim_original = sim_original.clamp(min=eps)
     sim_quantized = sim_quantized.clamp(min=eps)
     
-    # Compute KL in both directions
-    kl_orig_quant = F.kl_div(
-        sim_quantized.log(), 
-        sim_original, 
-        reduction='batchmean',
-        log_target=False
-    )
+    symmetric_kl = compute_symmetric_kl(sim_original, sim_quantized)
     
-    kl_quant_orig = F.kl_div(
-        sim_original.log(), 
-        sim_quantized, 
-        reduction='batchmean',
-        log_target=False
-    )
+    mse_loss = F.mse_loss(sim_original, sim_quantized)
     
-    # Average the two KL divergences
-    symmetric_kl = (kl_orig_quant + kl_quant_orig) / 2
-    
-    return symmetric_kl
+    return symmetric_kl # + mse_loss
 
 def eye_like(tensor):
     return torch.eye(*tensor.size(), out=torch.empty_like(tensor))

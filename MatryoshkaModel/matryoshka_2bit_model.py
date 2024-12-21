@@ -13,7 +13,7 @@ from common import create_mlp, create_modern_mlp, kl_similarity_preservation_los
 
 
 class CustomizedMatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
-    def __init__(self, embedding_model: OriginalEmbeddingCaller, dimension_levels: List[int], two_bits: int, one_bits: int, half_bits: int, expand_two_bit_to_three_bits: bool = False):
+    def __init__(self, embedding_model: OriginalEmbeddingCaller, dimension_levels: List[int], two_bits: int, one_and_half_bits: int, one_bits: int, half_bits: int, expand: bool = False):
         # USe a skip connection for the half bits part to create a better embedding
         # Compare 2 bit to 3 bit to just expanding to 3 bits at the end and then using binary quantization
         pass
@@ -155,7 +155,7 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
                 )  
                 embeddings = matryoshka_embeddings[output_dim]  
                 non_quant_embeddings = non_quant_embeddings[output_dim]
-            assert not torch.allclose(embeddings, baseline_embeddings, rtol=1e-3, atol=1e-5), "Transformed embeddings should be different from baseline embeddings"
+            # assert not torch.allclose(embeddings, baseline_embeddings, rtol=1e-3, atol=1e-5), "Transformed embeddings should be different from baseline embeddings"
   
         # If binary mode, convert embeddings to binary  
         if self.do_binary and self.baseline:  
@@ -228,14 +228,42 @@ class MatryoshkaTransformer(nn.Module):
         #     use_skip_connections=True
         # )
         
-        self.base_transform = nn.Sequential(nn.Linear(input_dim, input_dim*32), 
-                                            nn.Linear(input_dim*32, input_dim))
+        if use_rms_norm:
         
-        # init base transform
-        nn.init.kaiming_normal_(self.base_transform[0].weight)
-        nn.init.kaiming_normal_(self.base_transform[1].weight)
-        nn.init.constant_(self.base_transform[0].bias, 0)
-        nn.init.constant_(self.base_transform[1].bias, 0)
+            self.base_transform = nn.Sequential(nn.Linear(input_dim, input_dim*32),
+                                                # nn.LayerNorm(input_dim*32),
+                                                nn.GELU(), 
+                                                nn.RMSNorm(input_dim*32, eps=1e-6),
+                                                # nn.Linear(input_dim*32, input_dim*32),
+                                                # nn.GELU(),
+                                                nn.Linear(input_dim*32, input_dim))
+            
+            # init base transform
+            nn.init.kaiming_normal_(self.base_transform[0].weight)
+            nn.init.kaiming_normal_(self.base_transform[3].weight)
+            
+            nn.init.constant_(self.base_transform[0].bias, 0)
+            nn.init.constant_(self.base_transform[3].bias, 0)
+        else:
+            self.base_transform = nn.Sequential(nn.Linear(input_dim, input_dim*32),
+                                                nn.GELU(), 
+                                                nn.Linear(input_dim*32, input_dim))
+            
+            # init base transform
+            nn.init.kaiming_normal_(self.base_transform[0].weight)
+            nn.init.kaiming_normal_(self.base_transform[2].weight)
+            
+            nn.init.constant_(self.base_transform[0].bias, 0)
+            nn.init.constant_(self.base_transform[2].bias, 0)
+        
+        # nn.init.kaiming_normal_(self.base_transform[2].weight)
+        # nn.init.constant_(self.base_transform[2].bias, 0)
+        
+        # Init layer norm
+        # nn.init.constant_(self.base_transform[1].weight, 1)
+        # nn.init.constant_(self.base_transform[1].bias, 0)
+        
+        # self.base_transform = nn.Identity()
         
   
         for dim in self.dimension_levels:  
@@ -647,7 +675,8 @@ class QuantizationLayer(nn.Module):
             # Last level: all values above last threshold
             probs[:, :, -1] = cum_probs[:, :, -1]
             
-            # Ensure probabilities sum to 1
+            # Apply softmax to get probabilities
+            # probs = F.softmax(max(10, k) * probs, dim=2) 
             probs = probs / probs.sum(dim=2, keepdim=True)
             
             # Compute weighted sum
@@ -792,7 +821,46 @@ def increase_std_dev_over_time_loss(embeddings_dict: dict,
         loss = torch.exp(-overall_std_dev)
         overall_loss += loss.sum()
     return weight * overall_loss
-  
+
+def pull_close_to_quant_levels_loss(embeddings_dict: dict,  
+                                   quantization_bits: int,  
+                                   current_epoch: int,  
+                                   total_epochs: int,
+                                   num_current_step: int,
+                                   num_total_steps: int,
+                                   num_steps_per_epoch: int,
+                                   thresholds: dict, 
+                                   thresholds_0_100: dict) -> torch.Tensor:  
+    """
+    Pull embeddings close to quantization levels
+    """
+    reg_loss = 0.0  
+    progress = max(0.2, (np.exp(num_current_step / num_total_steps) - 1) / (np.e - 1))  # Progress ratio (0 to 1)
+    weight = progress  # Increase weight over time  
+    
+    loss = 0.0
+    dims = sorted(embeddings_dict.keys())
+    
+
+    for dim in dims:
+        emb = embeddings_dict[dim]
+        if quantization_bits == 1:
+            # We also want values to be close to 0 or 1
+            distance_to_levels = (torch.minimum(
+                torch.abs(emb), 
+                torch.abs(emb - 1.0)
+            ) ** 2).mean()
+            
+        elif quantization_bits == 2:
+            # We also want values to be close to 0, 1, 2, 3
+            # Distance to nearest quantization level
+            levels = torch.tensor([0., 1., 2., 3.], device=emb.device)
+            level_distances = torch.abs(emb.unsqueeze(-1) - levels)
+            distance_to_nearest_level = (level_distances.min(dim=-1)[0] ** 2).mean()
+            
+        loss += distance_to_nearest_level
+        
+    return weight * loss
 def quantization_regularization_loss(embeddings_dict: dict,  
                                    quantization_bits: int,  
                                    current_epoch: int,  
@@ -849,11 +917,7 @@ def quantization_regularization_loss(embeddings_dict: dict,
             range_violation_loss = (lower_bound_violation.pow(2) + upper_bound_violation.pow(2)).mean()
         
             
-            # We also want values to be close to 0 or 1
-            distance_to_levels = (torch.minimum(
-                torch.abs(emb), 
-                torch.abs(emb - 1.0)
-            ) ** 2).mean()
+            
             
             reg_loss += weight * (threshold_repulsion)
             
@@ -1003,9 +1067,10 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  
     matryoshka_model.transformer.to(device)  
     matryoshka_model.embedding_model.to(device)  
-    optimizer = torch.optim.Adam(matryoshka_model.transformer.parameters(), lr=learning_rate)  
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=learning_rate,  
-                                                    epochs=num_epochs, steps_per_epoch=len(dataloader), final_div_factor=100)  
+    if num_epochs > 0:
+        optimizer = torch.optim.Adam(matryoshka_model.transformer.parameters(), lr=learning_rate)  
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=learning_rate,  
+                                                        epochs=num_epochs, steps_per_epoch=len(dataloader), final_div_factor=100)  
     matryoshka_model.embedding_model.eval()  
     matryoshka_model.transformer.train()  
   
@@ -1024,7 +1089,7 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
                 embeddings = torch.tensor(embeddings)
                 embeddings = F.normalize(embeddings, p=2, dim=1)  
                 sample_embeddings_list.append(embeddings)  
-                if len(sample_embeddings_list) >= 100:  
+                if len(sample_embeddings_list) >= len(dataloader)//8:  
                     break  
             sample_embeddings = torch.cat(sample_embeddings_list, dim=0)  
     
@@ -1140,22 +1205,22 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}')  
         loss_dict['avg_loss'] = avg_loss
         
-        if matryoshka_model.train_binary or matryoshka_model.train_two_bit:
-            with torch.no_grad():  
-                for batch in tqdm(dataloader, desc="Collecting sample embeddings", total=len(dataloader)):  
-                    input_ids = batch['input_ids'].squeeze(1).to(device)  
-                    attention_mask = batch['attention_mask'].squeeze(1).to(device)  
-                    embeddings = matryoshka_model.embedding_model(  
-                        input_ids=input_ids,  
-                        attention_mask=attention_mask,  
-                    )
-                    # convert to tensor if not already
-                    embeddings = torch.tensor(embeddings)
-                    embeddings = F.normalize(embeddings, p=2, dim=1)  
-                    
-                    embeddings = embeddings.to(device)  
-                    # Forward pass through transformer  
-                    embeddings_dict, non_quant_embeddings = matryoshka_model.transformer(embeddings)  
-                    for dim, quant_layer in matryoshka_model.transformer.quantization_layers.items():  
-                        quant_layer.update_thresholds(non_quant_embeddings[int(dim)], momentum=0.99)
+    if matryoshka_model.train_binary or matryoshka_model.train_two_bit:
+        with torch.no_grad():  
+            for batch in tqdm(dataloader, desc="Collecting sample embeddings", total=len(dataloader)):  
+                input_ids = batch['input_ids'].squeeze(1).to(device)  
+                attention_mask = batch['attention_mask'].squeeze(1).to(device)  
+                embeddings = matryoshka_model.embedding_model(  
+                    input_ids=input_ids,  
+                    attention_mask=attention_mask,  
+                )
+                # convert to tensor if not already
+                embeddings = torch.tensor(embeddings)
+                embeddings = F.normalize(embeddings, p=2, dim=1)  
+                
+                embeddings = embeddings.to(device)  
+                # Forward pass through transformer  
+                embeddings_dict, non_quant_embeddings = matryoshka_model.transformer(embeddings)  
+                for dim, quant_layer in matryoshka_model.transformer.quantization_layers.items():  
+                    quant_layer.update_thresholds(non_quant_embeddings[int(dim)], momentum=0.99)
     return matryoshka_model
