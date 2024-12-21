@@ -3,7 +3,7 @@ base_model_name = "sentence-transformers/all-MiniLM-L12-v2"
 reg_strength = 0.01
 num_epochs = 1
 batch_size = 512
-lr = 0.001 # 0.001
+lr = 0.01 # 0.001
 max_grad_norm = 1.0
 
 max_samples_per_dataset = 10000 # 10000
@@ -54,7 +54,7 @@ test_modules = [
     
     # 'Matryoshka',
     'Matryoshka_2bit',
-    # 'Matryoshka_1bit',
+    'Matryoshka_1bit',
     'Matryoshka_2bit_3bit',
 ]
 save_dirs = [
@@ -64,9 +64,9 @@ save_dirs = [
     '__', 
     'run_20241202_1422', 
     "run_20241216_1750",
-    'run_20241220_1751', 
-    'run_20241220_1304',
-    'run_20241220_1751',
+    'run_20241221_0309', 
+    'run_20241221_0309',
+    'run_20241221_0309',
 ]
 
 # Thresholds are not changing with training for OneBitTwoBit

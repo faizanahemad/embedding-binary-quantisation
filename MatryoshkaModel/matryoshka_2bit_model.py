@@ -97,16 +97,16 @@ class MatryoshkaEmbeddingModel(OriginalEmbeddingCaller):
                 thresholds[idx] = quant_layer.calculate_thresholds(sample_embeddings)
         return thresholds
   
-    def init_thresholds(self, sample_embeddings: torch.Tensor):  
+    def init_thresholds(self, sample_embeddings: dict):  
         """  
         Initialize thresholds in quantization layers based on sample embeddings.  
   
         Args:  
             sample_embeddings (torch.Tensor): Sample embeddings used for initializing thresholds.  
         """  
-        for quant_layer in self.transformer.quantization_layers.values():  
+        for dim, quant_layer in self.transformer.quantization_layers.items():  
             if quant_layer.quantization_bits >= 1:  
-                quant_layer.initialize_thresholds(sample_embeddings)  
+                quant_layer.initialize_thresholds(sample_embeddings[int(dim)])  
   
     def encode(self,  
                sentences: List[str],  
@@ -446,7 +446,7 @@ class QuantizationLayer(nn.Module):
         self.thresholds_0_100.data = full_range_thresholds.to(self.thresholds_0_100.device)
         
         
-    def update_thresholds(self, batch_embeddings: torch.Tensor):
+    def update_thresholds(self, batch_embeddings: torch.Tensor, momentum: float = 0.995):
         """
         Update thresholds based on the current batch statistics.
         Can be called after each batch to maintain adaptive thresholds.
@@ -455,7 +455,6 @@ class QuantizationLayer(nn.Module):
             batch_embeddings (torch.Tensor): Current batch embeddings.
         """
         thresholds, full_range_thresholds = self.calculate_thresholds(batch_embeddings)
-        momentum = 0.995
         self.thresholds.data = momentum * self.thresholds.data + (1 - momentum) * thresholds.to(self.thresholds.device)  
         self.thresholds_0_100.data = momentum * self.thresholds_0_100.data + (1 - momentum) * full_range_thresholds.to(self.thresholds_0_100.device)
   
@@ -1030,7 +1029,11 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
             sample_embeddings = torch.cat(sample_embeddings_list, dim=0)  
     
         # Initialize thresholds in quantization layers  
-        matryoshka_model.init_thresholds(sample_embeddings)  
+        sample_embeddings = sample_embeddings.to(device)  
+        # Forward pass through transformer  
+        embeddings_dict, non_quant_embeddings = matryoshka_model.transformer(sample_embeddings)  
+        
+        matryoshka_model.init_thresholds(non_quant_embeddings)  
   
     
     num_current_step = 0
@@ -1123,7 +1126,7 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
                 # Anneal temperatures in quantization layers  
                 for dim, quant_layer in matryoshka_model.transformer.quantization_layers.items():  
                     quant_layer.anneal_temperature(epoch, num_epochs, num_current_step, num_total_steps, len(dataloader))  
-                    quant_layer.update_thresholds(embeddings_dict[int(dim)])
+                    quant_layer.update_thresholds(non_quant_embeddings[int(dim)])
             optimizer.zero_grad()  
             loss.backward()  
             loss_dict['total'] = loss.item()
@@ -1136,4 +1139,23 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
         avg_loss = total_loss / len(dataloader)  
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}')  
         loss_dict['avg_loss'] = avg_loss
+        
+        if matryoshka_model.train_binary or matryoshka_model.train_two_bit:
+            with torch.no_grad():  
+                for batch in tqdm(dataloader, desc="Collecting sample embeddings", total=len(dataloader)):  
+                    input_ids = batch['input_ids'].squeeze(1).to(device)  
+                    attention_mask = batch['attention_mask'].squeeze(1).to(device)  
+                    embeddings = matryoshka_model.embedding_model(  
+                        input_ids=input_ids,  
+                        attention_mask=attention_mask,  
+                    )
+                    # convert to tensor if not already
+                    embeddings = torch.tensor(embeddings)
+                    embeddings = F.normalize(embeddings, p=2, dim=1)  
+                    
+                    embeddings = embeddings.to(device)  
+                    # Forward pass through transformer  
+                    embeddings_dict, non_quant_embeddings = matryoshka_model.transformer(embeddings)  
+                    for dim, quant_layer in matryoshka_model.transformer.quantization_layers.items():  
+                        quant_layer.update_thresholds(non_quant_embeddings[int(dim)], momentum=0.99)
     return matryoshka_model
