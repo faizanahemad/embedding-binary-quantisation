@@ -513,6 +513,25 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         )
         task_results['Matryoshka_2bit_3bit_Trained'] = results_matryoshka_2bit_3bit
         
+        
+    if "Matryoshka_1_5bit" in test_modules:
+        # 10. Matryoshka_1_5bit Trained
+        print("  Evaluating Matryoshka_1_5bit Trained...")
+        embedding_model_name = base_model_name
+        embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
+        matryoshka_model_1_5bit = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=get_dimension_levels(embedding_dim), train_binary=False, train_two_bit=False, train_one_and_half_bit=True, expand_two_bit_to_three_bits=False, expand_one_and_half_bit_to_two_bits=True)
+        matryoshka_model_1_5bit.load(f'saved_models/{save_dirs[9]}/matryoshka_model_1_5bit.pth')
+        matryoshka_model_1_5bit.do_binary = False
+        matryoshka_model_1_5bit.do_two_bits = False
+        matryoshka_model_1_5bit.do_one_and_half_bit = True
+        results_matryoshka_1_5bit = evaluate_model_on_tasks(
+            model=matryoshka_model_1_5bit,
+            tasks=[task],
+            model_name='Matryoshka_1_5bit_Trained',
+            results_dir=results_dir
+        )
+        task_results['Matryoshka_1_5bit_Trained'] = results_matryoshka_1_5bit
+        
     # Print individual task results
     df_task_results = aggregate_results(task_results, [task])
     print(f"\nResults for task {task}:")
@@ -596,7 +615,8 @@ def main():
         'Matryoshka_2bit_3bit_Trained': [],
         'Matryoshka_2bit_non_quantized': [],
         'Matryoshka_1bit_non_quantized': [],
-        'Matryoshka_1bit_Untrained': []
+        'Matryoshka_1bit_Untrained': [],
+        'Matryoshka_1_5bit_Trained': [],
     }
 
     # Evaluate each task individually
