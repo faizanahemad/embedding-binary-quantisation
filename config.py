@@ -1,7 +1,7 @@
 base_model_name = "jinaai/jina-embeddings-v3"# "", "sentence-transformers/all-MiniLM-L12-v2"
 base_model_name = "sentence-transformers/all-MiniLM-L12-v2"
 reg_strength = 0.01
-num_epochs = 1
+num_epochs = 5
 batch_size = 512
 lr = 0.01 # 0.001
 max_grad_norm = 1.0
@@ -23,6 +23,9 @@ use_orthogonality_regularization = True
 
 
 use_rms_norm = False
+
+customized_matryoshka_output_dim = 384
+customized_matryoshka_kwargs = dict(two_bits=32, one_and_half_bits=32, one_bits=128, half_bits=192, expand=True)
 
 
 init_std = 0.01
@@ -46,7 +49,8 @@ train_modules = [
     # 'Matryoshka_2bit',
     # 'Matryoshka_1bit',
     # 'Matryoshka_2bit_3bit',
-    'Matryoshka_1_5bit',
+    # 'Matryoshka_1_5bit',
+    'CustomizedMatryoshka',
 ] 
 
 test_modules = [
@@ -57,10 +61,11 @@ test_modules = [
     # 'OneBitTwoBit',
     
     # 'Matryoshka',
-    'Matryoshka_2bit',
+    # 'Matryoshka_2bit',
     # 'Matryoshka_1bit',
-    'Matryoshka_2bit_3bit',
-    'Matryoshka_1_5bit',
+    # 'Matryoshka_2bit_3bit',
+    # 'Matryoshka_1_5bit',
+    'CustomizedMatryoshka',
 ]
 save_dirs = [
     'run_20241201_1638', 
@@ -75,6 +80,8 @@ save_dirs = [
     'run_20241222_0631',
     
     'run_20241222_0646',
+    
+    'run_20241223_1653',
 ]
 
 # Thresholds are not changing with training for OneBitTwoBit

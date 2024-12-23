@@ -11,6 +11,27 @@ Main Score Results:
 | Total     |                    0.3854 |                      0.3843 |                          0.4296 |                         0.4175 |                    0.4166 |                          0.43   |     0.4293 |
 
 
+Main Score Results:
+| Task      |   Matryoshka_1_5bit_Trained |   Matryoshka_2bit_3bit_Trained |   Matryoshka_2bit_Trained |   Matryoshka_2bit_non_quantized |   Original |
+|:----------|----------------------------:|-------------------------------:|--------------------------:|--------------------------------:|-----------:|
+| ArguAna   |                      0.4405 |                         0.4466 |                    0.4547 |                          0.4547 |     0.4714 |
+| NFCorpus  |                      0.2892 |                         0.3009 |                    0.304  |                          0.304  |     0.3225 |
+| SCIDOCS   |                      0.1958 |                         0.2036 |                    0.2048 |                          0.2048 |     0.2182 |
+| SciFact   |                      0.5934 |                         0.6037 |                    0.6014 |                          0.6014 |     0.6264 |
+| TRECCOVID |                      0.5178 |                         0.5404 |                    0.5371 |                          0.5371 |     0.5082 |
+| Total     |                      0.4073 |                         0.419  |                    0.4204 |                          0.4204 |     0.4293 |
+
+Main Score Results:
+| Task      |   Matryoshka_1_5bit_Trained |   Matryoshka_2bit_3bit_Trained |   Matryoshka_2bit_Trained |   Matryoshka_2bit_non_quantized |   Original |
+|:----------|----------------------------:|-------------------------------:|--------------------------:|--------------------------------:|-----------:|
+| ArguAna   |                      0.4405 |                         0.4466 |                    0.4547 |                          0.4547 |     0.4714 |
+| NFCorpus  |                      0.2892 |                         0.3009 |                    0.304  |                          0.304  |     0.3225 |
+| SCIDOCS   |                      0.1958 |                         0.2036 |                    0.2048 |                          0.2048 |     0.2182 |
+| SciFact   |                      0.5934 |                         0.6037 |                    0.6014 |                          0.6014 |     0.6264 |
+| TRECCOVID |                      0.5178 |                         0.5404 |                    0.5371 |                          0.5371 |     0.5082 |
+| Total     |                      0.4073 |                         0.419  |                    0.4204 |                          0.4204 |     0.4293 |
+
+
 Orthogonality Regularization
 Main Score Results:
 | Task      |   Matryoshka_2bit_3bit_Trained |   Matryoshka_2bit_Trained |   Matryoshka_2bit_non_quantized |   Original |

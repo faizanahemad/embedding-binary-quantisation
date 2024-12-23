@@ -31,7 +31,7 @@ from mteb import MTEB, TaskResult
 from mteb.abstasks.AbsTask import AbsTask
 from mteb.models.wrapper import Wrapper
 from mteb.encoder_interface import Encoder
-from MatryoshkaModel.matryoshka_2bit_model import MatryoshkaEmbeddingModel
+from MatryoshkaModel.matryoshka_2bit_model import MatryoshkaEmbeddingModel, CustomizedMatryoshkaEmbeddingModel
 from config import base_model_name, need_baselines, binary_baseline
 
 from typing import List, Dict  
@@ -41,7 +41,7 @@ from datetime import datetime
 # Assuming QuantizationModuleStage1 and QuantizationModuleStage2 are defined in quantization_modules.py  
 from improved_quantisation_module import ImprovedQuantizationModule
 from train import QuantizationModuleStage1, QuantizationModuleStage2, QuantizationModuleStage1WithScales, QuantizationModuleOneBitTwoBit
-from config import save_dirs, test_modules
+from config import save_dirs, test_modules, customized_matryoshka_kwargs
 from common import OriginalEmbeddingModel, OriginalEmbeddingModelBinary, QuantizedEmbeddingModel, SentenceTransformerEmbeddingCaller, get_dimension_levels
 batch_size = 512
   
@@ -532,6 +532,24 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         )
         task_results['Matryoshka_1_5bit_Trained'] = results_matryoshka_1_5bit
         
+    if "CustomizedMatryoshka" in test_modules:
+        # 11. CustomizedMatryoshka Trained
+        print("  Evaluating CustomizedMatryoshka Trained...")
+        embedding_model_name = base_model_name
+        embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
+        matryoshka_model_customized = CustomizedMatryoshkaEmbeddingModel(embedding_model, **customized_matryoshka_kwargs)
+        matryoshka_model_customized.load(f'saved_models/{save_dirs[10]}/matryoshka_model_customized.pth')
+        matryoshka_model_customized.mteb_model_meta.name = 'CustomizedMatryoshka_Trained'
+        print(f"CustomizedMatryoshka_Trained: Dims = {matryoshka_model_customized.total_dims}, expanded_dims = {matryoshka_model_customized.expanded_output_dims}")
+        
+        results_matryoshka_customized = evaluate_model_on_tasks(
+            model=matryoshka_model_customized,
+            tasks=[task],
+            model_name='CustomizedMatryoshka_Trained',
+            results_dir=results_dir
+        )
+        task_results['CustomizedMatryoshka_Trained'] = results_matryoshka_customized
+        
     # Print individual task results
     df_task_results = aggregate_results(task_results, [task])
     print(f"\nResults for task {task}:")
@@ -617,6 +635,7 @@ def main():
         'Matryoshka_1bit_non_quantized': [],
         'Matryoshka_1bit_Untrained': [],
         'Matryoshka_1_5bit_Trained': [],
+        'CustomizedMatryoshka_Trained': [],
     }
 
     # Evaluate each task individually

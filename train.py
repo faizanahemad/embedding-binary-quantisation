@@ -6,8 +6,8 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel  
 from torch.utils.data import DataLoader, Dataset  
 import numpy as np  
-from MatryoshkaModel.matryoshka_2bit_model import train_matryoshka_model, MatryoshkaEmbeddingModel, MatryoshkaTransformer
-from config import base_model_name, reg_strength, num_epochs, batch_size, train_modules, save_dirs
+from MatryoshkaModel.matryoshka_2bit_model import CustomizedMatryoshkaEmbeddingModel, train_customized_matryoshka_model, train_matryoshka_model, MatryoshkaEmbeddingModel, MatryoshkaTransformer
+from config import base_model_name, reg_strength, num_epochs, batch_size, train_modules, save_dirs, customized_matryoshka_kwargs
 
 from dataset import CombinedSimilarityDataset
 from common import SentenceTransformerEmbeddingCaller, get_dimension_levels
@@ -163,6 +163,12 @@ def main():
         matryoshka_model = train_matryoshka_model(matryoshka_model, dataloader, num_epochs=num_epochs)
         matryoshka_model.save(os.path.join(save_dir, 'matryoshka_model_1_5bit.pth'))
     
+    if "CustomizedMatryoshka" in train_modules:
+        embedding_model = SentenceTransformerEmbeddingCaller(base_model_name)
+        matryoshka_model = CustomizedMatryoshkaEmbeddingModel(embedding_model, **customized_matryoshka_kwargs)
+        matryoshka_model.to(device)
+        matryoshka_model = train_customized_matryoshka_model(matryoshka_model, dataloader, num_epochs=num_epochs)
+        matryoshka_model.save(os.path.join(save_dir, 'matryoshka_model_customized.pth'))
       
     print(f'Saving models to {save_dir}')
     if 'stage1' in train_modules:
