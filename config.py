@@ -21,16 +21,18 @@ quantization_regularization = True
 
 use_orthogonality_regularization = True
 
+enable_matryoshka_training = True
+
 
 use_rms_norm = False
 
-customized_matryoshka_output_dim = 384
+customized_matryoshka_output_dim = 64
 customized_matryoshka_kwargs = dict(two_bits=32, one_and_half_bits=32, one_bits=128, half_bits=192, expand=True)
 
 
 init_std = 0.01
 
-matryoshka_output_dim = 384
+matryoshka_output_dim = 48
 
 temperature = 10 # 10 best
 
@@ -61,10 +63,10 @@ test_modules = [
     # 'OneBitTwoBit',
     
     # 'Matryoshka',
-    # 'Matryoshka_2bit',
+    'Matryoshka_2bit',
     # 'Matryoshka_1bit',
     # 'Matryoshka_2bit_3bit',
-    # 'Matryoshka_1_5bit',
+    'Matryoshka_1_5bit',
     'CustomizedMatryoshka',
 ]
 save_dirs = [
@@ -81,7 +83,7 @@ save_dirs = [
     
     'run_20241222_0646',
     
-    'run_20241223_1653',
+    'run_20241223_1748',
 ]
 
 # Thresholds are not changing with training for OneBitTwoBit

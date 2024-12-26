@@ -269,6 +269,9 @@ class MatryoshkaTransformer(nn.Module):
             
             nn.init.constant_(self.base_transform[0].bias, 0)
             nn.init.constant_(self.base_transform[2].bias, 0)
+            
+        if not enable_matryoshka_training:
+            self.base_transform = nn.Identity()
         
         
   
@@ -953,6 +956,8 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
     num_current_step = 0
     num_total_steps = num_epochs * len(dataloader)
     for epoch in range(num_epochs):  
+        if not enable_matryoshka_training:
+            break
         total_loss = 0.0  
         loss_dict = {}
         pbar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{num_epochs}')
@@ -1473,6 +1478,10 @@ class CustomizedMatryoshkaTransformer(nn.Module):
   
         # Initialize base transformation network  
         self.base_transform = self._init_base_transform()  
+        
+        if not enable_matryoshka_training:
+            self.base_transform = nn.Identity()
+            
   
     def _compute_slice_indices(self) -> Dict[str, Tuple[int, int]]:  
         """  
@@ -1744,6 +1753,8 @@ def train_customized_matryoshka_model(model: CustomizedMatryoshkaEmbeddingModel,
     num_current_step = 0  
     num_total_steps = num_epochs * len(dataloader)  
     for epoch in range(num_epochs):  
+        if not enable_matryoshka_training:
+            break
         total_loss = 0.0  
         loss_dict = {}  
         pbar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{num_epochs}')  
