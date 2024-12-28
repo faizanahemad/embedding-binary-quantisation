@@ -77,7 +77,7 @@ def optimized_cosine_similarity(query_vector, passage_vectors_norm):
     similarities = passage_vectors_norm @ query_vector_norm  
     return similarities  
   
-@njit(parallel=True, fastmath=True)
+@njit(parallel=True, fastmath=True, cache=True)
 def cosine_similarity_jit(query_vector, passage_vectors):
     """
     Optimized JIT-compiled cosine similarity using vectorized operations.
@@ -103,7 +103,7 @@ def cosine_similarity_jit(query_vector, passage_vectors):
     
     return similarities
 
-@njit(parallel=True, fastmath=True)
+@njit(parallel=True, fastmath=True, cache=True)
 def cosine_similarity_jit_prenorm(query_vector, passage_vectors_norm):
     """
     Optimized JIT-compiled cosine similarity using vectorized operations.
@@ -121,20 +121,30 @@ def cosine_similarity_jit_prenorm(query_vector, passage_vectors_norm):
     return similarities
 
 # Pre-warm the function
-def prewarm_similarity_function():
+def prewarm_similarity_function(N_list, D_list):
     """
-    Pre-warm the JIT-compiled function to avoid cold start in production.
+    Pre-warm the JIT-compiled function for all N,D combinations.
+    
+    Args:
+        N_list (list): List of N values to pre-warm for
+        D_list (list): List of D values to pre-warm for
     """
-    # Small dummy data for compilation
-    D, N = 128, 100
-    dummy_query = np.random.randn(D).astype(np.float32)
-    dummy_passages = np.random.randn(N, D).astype(np.float32)
+    print("Pre-warming JIT functions for all sizes...")
     
-    # First call compiles the function
-    _ = cosine_similarity_jit(dummy_query, dummy_passages)
-    _ = cosine_similarity_jit_prenorm(dummy_query, dummy_passages)
+    for D in D_list:
+        for N in N_list:
+            # Generate dummy data for this size
+            dummy_query = np.random.randn(D).astype(np.float32)
+            dummy_passages = np.random.randn(N, D).astype(np.float32)
+            dummy_passages_norm = dummy_passages / np.linalg.norm(dummy_passages, axis=1)[:, np.newaxis]
+            
+            # Pre-warm both JIT functions
+            _ = cosine_similarity_jit(dummy_query, dummy_passages)
+            _ = cosine_similarity_jit_prenorm(dummy_query, dummy_passages_norm)
+            
+            print(f"Pre-warmed for N={N}, D={D}")
     
-    print("JIT compilation completed - function is pre-warmed")
+    print("JIT compilation completed for all sizes")
   
 def pack_bits(binary_vectors):  
     """  
@@ -217,100 +227,96 @@ def compute_hamming_distance_packed(a_packed, b_packed):
     return int(hamming_distance)  
   
 # Benchmarking Functions  
-def benchmark_similarity_methods(N_list, D_list):  
-    """  
-    Benchmarks different similarity computation methods.  
-  
-    Args:  
-        N_list (list): List of numbers of passage vectors to test.  
-        D_list (list): List of dimensions to test.  
-  
-    Returns:  
-        results (dict): Timing results for each method.  
-    """  
-    
-    # Pre-warm
+def benchmark_similarity_methods(N_list, D_list, num_runs=5):
+    """
+    Benchmarks different similarity computation methods.
+
+    Args:
+        N_list (list): List of numbers of passage vectors to test.
+        D_list (list): List of dimensions to test.
+        num_runs (int): Number of times to run each benchmark for averaging.
+
+    Returns:
+        results (dict): Timing results for each method.
+    """
+    # Pre-warm JIT functions
     t0 = time.perf_counter()
-    prewarm_similarity_function()
+    prewarm_similarity_function(N_list, D_list)
     prewarm_time = time.perf_counter() - t0
     print(f"Pre-warming time: {prewarm_time:.4f} seconds")
-    results = {  
-        'cosine': [],  
-        'cosine_pre_norm': [],  
-        'cosine_optimized': [],  
-        'cosine_jit': [],  
-        'cosine_jit_prenorm': [],  
-        'hamming': [],  
-        'hamming_packed': []  
-    }  
-    for D in D_list:  
-        for N in N_list:  
-            print(f"\nBenchmarking with N={N}, D={D}")  
-            # Generate vectors (not included in timing)  
-            query_vector, passage_vectors = generate_vectors(N, D)  
-  
-            # Pre-normalize passage vectors for cosine_pre_norm  
-            passage_norms = np.linalg.norm(passage_vectors, axis=1)  
-            # Normalize passage vectors for cosine_optimized  
-            passage_vectors_norm = passage_vectors / passage_norms[:, np.newaxis]  
-  
-            # Quantize vectors for Hamming similarity  
-            # For simplicity, we will binarize the vectors using a threshold  
-            threshold = 0.5  
-            query_vector_binary = (query_vector >= threshold).astype(np.uint8)  
-            passage_vectors_binary = (passage_vectors >= threshold).astype(np.uint8)  
-  
-            # Pack binary vectors  
-            query_vector_packed = pack_bits(query_vector_binary.reshape(1, -1))[0]  
-            passage_vectors_packed = pack_bits(passage_vectors_binary)  
-  
-            # Ensure D for Hamming is original dimension before padding  
-            D_hamming = D  
-  
-            # Time standard cosine similarity  
-            start_time = time.time()  
-            cosine_similarity(query_vector, passage_vectors)  
-            elapsed_time = time.time() - start_time  
-            results['cosine'].append((N, D, elapsed_time))  
-  
-            # Time cosine similarity with pre-normalization  
-            start_time = time.time()  
-            cosine_similarity_pre_norm(query_vector, passage_vectors_norm, passage_norms)  
-            elapsed_time = time.time() - start_time  
-            results['cosine_pre_norm'].append((N, D, elapsed_time))  
-  
-            # Time optimized cosine similarity  
-            start_time = time.time()  
-            optimized_cosine_similarity(query_vector, passage_vectors_norm)  
-            elapsed_time = time.time() - start_time  
-            results['cosine_optimized'].append((N, D, elapsed_time))  
-  
-            # Time JIT-compiled cosine similarity  
-            start_time = time.time()  
-            cosine_similarity_jit(query_vector, passage_vectors)  
-            elapsed_time = time.time() - start_time  
-            results['cosine_jit'].append((N, D, elapsed_time))  
-  
-            # Time JIT-compiled cosine similarity with pre-normalized passage vectors  
-            start_time = time.time()  
-            cosine_similarity_jit_prenorm(query_vector, passage_vectors_norm)  
-            elapsed_time = time.time() - start_time  
-            results['cosine_jit_prenorm'].append((N, D, elapsed_time))  
-  
-            # Time Hamming similarity without packing  
-            start_time = time.time()  
-            hamming_similarity(query_vector_binary, passage_vectors_binary)  
-            elapsed_time = time.time() - start_time  
-            results['hamming'].append((N, D, elapsed_time))  
-  
-            # Time Hamming similarity with packing using numpy.bitwise_count  
-            start_time = time.time()  
-            hamming_similarity_packed(query_vector_packed, passage_vectors_packed, D_hamming)  
-            elapsed_time = time.time() - start_time  
-            results['hamming_packed'].append((N, D, elapsed_time))  
-  
-    return results  
-  
+
+    results = {
+        'cosine': [], 'cosine_pre_norm': [], 'cosine_optimized': [],
+        'cosine_jit': [], 'cosine_jit_prenorm': [],
+        'hamming': [], 'hamming_packed': []
+    }
+
+    for D in D_list:
+        for N in N_list:
+            print(f"\nBenchmarking with N={N}, D={D}")
+            
+            # Generate vectors and prepare data (outside timing)
+            query_vector, passage_vectors = generate_vectors(N, D)
+            passage_norms = np.linalg.norm(passage_vectors, axis=1)
+            passage_vectors_norm = passage_vectors / passage_norms[:, np.newaxis]
+            
+            # Prepare binary vectors
+            threshold = 0.5
+            query_vector_binary = (query_vector >= threshold).astype(np.uint8)
+            passage_vectors_binary = (passage_vectors >= threshold).astype(np.uint8)
+            query_vector_packed = pack_bits(query_vector_binary.reshape(1, -1))[0]
+            passage_vectors_packed = pack_bits(passage_vectors_binary)
+            
+            # Dictionary to store times for this N,D combination
+            times = {method: [] for method in results.keys()}
+            
+            # Warmup run (results discarded)
+            for method in results.keys():
+                if method == 'cosine':
+                    _ = cosine_similarity(query_vector, passage_vectors)
+                elif method == 'cosine_pre_norm':
+                    _ = cosine_similarity_pre_norm(query_vector, passage_vectors_norm, passage_norms)
+                elif method == 'cosine_jit':
+                    _ = cosine_similarity_jit(query_vector, passage_vectors)
+                elif method == 'cosine_jit_prenorm':
+                    _ = cosine_similarity_jit_prenorm(query_vector, passage_vectors_norm)
+                elif method == 'hamming':
+                    _ = hamming_similarity(query_vector_binary, passage_vectors_binary)
+                elif method == 'hamming_packed':
+                    _ = hamming_similarity_packed(query_vector_packed, passage_vectors_packed, D)
+                    
+            # Actual benchmark runs
+            for run in range(num_runs):
+                for method in results.keys():
+                    start_time = time.perf_counter()  # More precise than time.time()
+                    
+                    if method == 'cosine':
+                        _ = cosine_similarity(query_vector, passage_vectors)
+                    elif method == 'cosine_pre_norm':
+                        _ = cosine_similarity_pre_norm(query_vector, passage_vectors_norm, passage_norms)
+                    elif method == 'cosine_optimized':
+                        _ = optimized_cosine_similarity(query_vector, passage_vectors_norm)
+                    elif method == 'cosine_jit':
+                        _ = cosine_similarity_jit(query_vector, passage_vectors)
+                    elif method == 'cosine_jit_prenorm':
+                        _ = cosine_similarity_jit_prenorm(query_vector, passage_vectors_norm)
+                    elif method == 'hamming':
+                        _ = hamming_similarity(query_vector_binary, passage_vectors_binary)
+                    elif method == 'hamming_packed':
+                        _ = hamming_similarity_packed(query_vector_packed, passage_vectors_packed, D)
+                    
+                    elapsed_time = time.perf_counter() - start_time
+                    times[method].append(elapsed_time)
+            
+            # Store average times
+            for method in results.keys():
+                avg_time = np.mean(times[method])
+                std_time = np.std(times[method])
+                print(f"{method}: {avg_time:.4f}s ± {std_time:.4f}s")
+                results[method].append((N, D, avg_time, std_time))
+
+    return results
+
 def plot_results(results, N_list, D_list):  
     """  
     Plots the benchmarking results.  
