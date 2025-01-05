@@ -159,3 +159,5 @@ Main Score Results:
 - Multiple layers did not work
 - One GELU Non linearity worked
 - Layer normalization did not work
+
+

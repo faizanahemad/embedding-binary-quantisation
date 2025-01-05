@@ -858,6 +858,22 @@ def information_bottleneck_operator(embeddings_dict: dict) -> dict:
         emb = emb * (norm_before / norm_after)
         new_embeddings_dict[dim] = emb
     return new_embeddings_dict
+
+def information_bottleneck_loss_fn(x: torch.Tensor, x_0: float = 0.1, alpha: float = 0.3) -> torch.Tensor:
+    """  
+    Implements the function f(x) = (abs(x) * (abs(x)/(x_0 + abs(x))))^alpha  
+      
+    Args:  
+        x: PyTorch tensor of any shape  
+          
+    Returns:  
+        PyTorch tensor of same shape as input  
+    """  
+    abs_x = torch.abs(x)  
+    fraction = abs_x / (x_0 + abs_x)  
+    inner_term = abs_x * fraction  
+    result = torch.pow(inner_term, alpha)  
+    return result  
   
 def information_bottleneck_regularization(embeddings_dict: dict) -> torch.Tensor:  
     """  
@@ -892,7 +908,7 @@ def information_bottleneck_regularization(embeddings_dict: dict) -> torch.Tensor
         weighted_values = segment_values * dimension_weights.view(1, -1)  # Broadcasting weights across batch
         
         # Compute L1 regularization with dimension-specific weights
-        reg_loss += torch.mean(torch.abs(weighted_values))
+        reg_loss += torch.mean(information_bottleneck_loss_fn(weighted_values))
         
     return reg_loss
   
@@ -915,7 +931,7 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  
     matryoshka_model.transformer.to(device)  
     matryoshka_model.embedding_model.to(device)  
-    if num_epochs > 0:
+    if num_epochs > 0 and enable_matryoshka_training:
         optimizer = torch.optim.Adam(matryoshka_model.transformer.parameters(), lr=learning_rate)  
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=learning_rate,  
                                                         epochs=num_epochs, steps_per_epoch=len(dataloader), final_div_factor=100)  
@@ -1061,7 +1077,9 @@ def train_matryoshka_model(matryoshka_model: MatryoshkaEmbeddingModel,
         
     if quantized_training:
         with torch.no_grad():  
-            for batch in tqdm(dataloader, desc="Collecting sample embeddings", total=len(dataloader)):  
+            for idx, batch in enumerate(tqdm(dataloader, desc="Collecting sample embeddings", total=len(dataloader))):  
+                if idx > len(dataloader) // 10:
+                    break
                 input_ids = batch['input_ids'].squeeze(1).to(device)  
                 attention_mask = batch['attention_mask'].squeeze(1).to(device)  
                 embeddings = matryoshka_model.embedding_model(  
@@ -1718,14 +1736,15 @@ def train_customized_matryoshka_model(model: CustomizedMatryoshkaEmbeddingModel,
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  
     model.transformer.to(device)  
     model.embedding_model.to(device)  
-    optimizer = torch.optim.Adam(model.transformer.parameters(), lr=learning_rate)  
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(  
-        optimizer,  
-        max_lr=learning_rate,  
-        epochs=num_epochs,  
-        steps_per_epoch=len(dataloader),  
-        final_div_factor=100  
-    )  
+    if enable_matryoshka_training and num_epochs > 0:
+        optimizer = torch.optim.Adam(model.transformer.parameters(), lr=learning_rate)  
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(  
+            optimizer,  
+            max_lr=learning_rate,  
+            epochs=num_epochs,  
+            steps_per_epoch=len(dataloader),  
+            final_div_factor=100  
+        )  
     model.embedding_model.eval()  
     model.transformer.train()  
   
@@ -1906,7 +1925,9 @@ def train_customized_matryoshka_model(model: CustomizedMatryoshkaEmbeddingModel,
   
     # Final threshold update after training  
     with torch.no_grad():  
-        for batch in tqdm(dataloader, desc="Updating thresholds", total=len(dataloader)):  
+        for idx, batch in enumerate(tqdm(dataloader, desc="Updating thresholds", total=len(dataloader))):  
+            if idx > len(dataloader) // 10:
+                break
             input_ids = batch['input_ids'].squeeze(1).to(device)  
             attention_mask = batch['attention_mask'].squeeze(1).to(device)  
             embeddings = model.embedding_model(  
