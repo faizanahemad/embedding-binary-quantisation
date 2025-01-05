@@ -227,15 +227,15 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
     if binary_baseline:
 
         # 2. Original Binary
-        print("  Evaluating Original Binary...")
-        original_model_binary = OriginalEmbeddingModelBinary(model_name)
-        results_original_binary = evaluate_model_on_tasks(
-            model=original_model_binary,
-            tasks=[task],
-            model_name='OriginalBinary',
-            results_dir=results_dir
-        )
-        task_results['OriginalBinary'] = results_original_binary
+        # print("  Evaluating Original Binary...")
+        # original_model_binary = OriginalEmbeddingModelBinary(model_name)
+        # results_original_binary = evaluate_model_on_tasks(
+        #     model=original_model_binary,
+        #     tasks=[task],
+        #     model_name='OriginalBinary',
+        #     results_dir=results_dir
+        # )
+        # task_results['OriginalBinary'] = results_original_binary
 
         # 2. Stage1 Untrained
         print("  Evaluating Stage1 Untrained...")
@@ -406,23 +406,23 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         )
         task_results['Matryoshka_Baseline'] = results_matryoshka
         
-    if 'Matryoshka_2bit' in test_modules:
+    # if 'Matryoshka_2bit' in test_modules:
         # 7. Matryoshka_2bit Trained
-        print("  Evaluating Matryoshka_2bit Trained...")
-        embedding_model_name = base_model_name
-        embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
-        matryoshka_model_2bit = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=get_dimension_levels(embedding_dim), train_binary=False, train_two_bit=True, expand_two_bit_to_three_bits=False)
-        matryoshka_model_2bit.load(f'saved_models/{save_dirs[6]}/matryoshka_model_2bit.pth')
-        matryoshka_model_2bit.mteb_model_meta.name = 'Matryoshka_2bit_non_quantized'
-        matryoshka_model_2bit.do_binary = False
-        matryoshka_model_2bit.do_two_bits = False
-        results_matryoshka_2bit = evaluate_model_on_tasks(
-            model=matryoshka_model_2bit,
-            tasks=[task],
-            model_name='Matryoshka_2bit_non_quantized',
-            results_dir=results_dir
-        )
-        task_results['Matryoshka_2bit_non_quantized'] = results_matryoshka_2bit
+        # print("  Evaluating Matryoshka_2bit Trained...")
+        # embedding_model_name = base_model_name
+        # embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
+        # matryoshka_model_2bit = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=get_dimension_levels(embedding_dim), train_binary=False, train_two_bit=True, expand_two_bit_to_three_bits=False)
+        # matryoshka_model_2bit.load(f'saved_models/{save_dirs[6]}/matryoshka_model_2bit.pth')
+        # matryoshka_model_2bit.mteb_model_meta.name = 'Matryoshka_2bit_non_quantized'
+        # matryoshka_model_2bit.do_binary = False
+        # matryoshka_model_2bit.do_two_bits = False
+        # results_matryoshka_2bit = evaluate_model_on_tasks(
+        #     model=matryoshka_model_2bit,
+        #     tasks=[task],
+        #     model_name='Matryoshka_2bit_non_quantized',
+        #     results_dir=results_dir
+        # )
+        # task_results['Matryoshka_2bit_non_quantized'] = results_matryoshka_2bit
     
     
     if 'Matryoshka_2bit' in test_modules:
@@ -462,37 +462,37 @@ def evaluate_single_task(task: str, model_name: str, embedding_model: SentenceTr
         task_results['Matryoshka_1bit_Trained'] = results_matryoshka_1bit
         
         
-        matryoshka_model_1bit = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=get_dimension_levels(embedding_dim), train_binary=True, train_two_bit=False, expand_two_bit_to_three_bits=False)
-        matryoshka_model_1bit.load(f'saved_models/{save_dirs[7]}/matryoshka_model_1bit.pth')
-        matryoshka_model_1bit.mteb_model_meta.name = 'Matryoshka_1bit_Untrained'
-        matryoshka_model_1bit.train_binary = False
-        matryoshka_model_1bit.transformer.train_binary = False
-        matryoshka_model_1bit.do_binary = True
-        matryoshka_model_1bit.do_two_bits = False
-        results_matryoshka_1bit = evaluate_model_on_tasks(
-            model=matryoshka_model_1bit,
-            tasks=[task],
-            model_name='Matryoshka_1bit_Untrained',
-            results_dir=results_dir
-        )
-        task_results['Matryoshka_1bit_Untrained'] = results_matryoshka_1bit
+        # matryoshka_model_1bit = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=get_dimension_levels(embedding_dim), train_binary=True, train_two_bit=False, expand_two_bit_to_three_bits=False)
+        # matryoshka_model_1bit.load(f'saved_models/{save_dirs[7]}/matryoshka_model_1bit.pth')
+        # matryoshka_model_1bit.mteb_model_meta.name = 'Matryoshka_1bit_Untrained'
+        # matryoshka_model_1bit.train_binary = False
+        # matryoshka_model_1bit.transformer.train_binary = False
+        # matryoshka_model_1bit.do_binary = True
+        # matryoshka_model_1bit.do_two_bits = False
+        # results_matryoshka_1bit = evaluate_model_on_tasks(
+        #     model=matryoshka_model_1bit,
+        #     tasks=[task],
+        #     model_name='Matryoshka_1bit_Untrained',
+        #     results_dir=results_dir
+        # )
+        # task_results['Matryoshka_1bit_Untrained'] = results_matryoshka_1bit
         
-        # 8. Matryoshka_1bit Non Quantized
-        print("  Evaluating Matryoshka_1bit Non Quantized...")
-        embedding_model_name = base_model_name
-        embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
-        matryoshka_model_1bit = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=get_dimension_levels(embedding_dim), train_binary=True, train_two_bit=False, expand_two_bit_to_three_bits=False)
-        matryoshka_model_1bit.load(f'saved_models/{save_dirs[7]}/matryoshka_model_1bit.pth')
-        matryoshka_model_1bit.mteb_model_meta.name = 'Matryoshka_1bit_non_quantized'
-        matryoshka_model_1bit.do_binary = False
-        matryoshka_model_1bit.do_two_bits = False
-        results_matryoshka_1bit = evaluate_model_on_tasks(
-            model=matryoshka_model_1bit,
-            tasks=[task],
-            model_name='Matryoshka_1bit_non_quantized',
-            results_dir=results_dir
-        )
-        task_results['Matryoshka_1bit_non_quantized'] = results_matryoshka_1bit
+        # # 8. Matryoshka_1bit Non Quantized
+        # print("  Evaluating Matryoshka_1bit Non Quantized...")
+        # embedding_model_name = base_model_name
+        # embedding_model = SentenceTransformerEmbeddingCaller(embedding_model_name)
+        # matryoshka_model_1bit = MatryoshkaEmbeddingModel(embedding_model, dimension_levels=get_dimension_levels(embedding_dim), train_binary=True, train_two_bit=False, expand_two_bit_to_three_bits=False)
+        # matryoshka_model_1bit.load(f'saved_models/{save_dirs[7]}/matryoshka_model_1bit.pth')
+        # matryoshka_model_1bit.mteb_model_meta.name = 'Matryoshka_1bit_non_quantized'
+        # matryoshka_model_1bit.do_binary = False
+        # matryoshka_model_1bit.do_two_bits = False
+        # results_matryoshka_1bit = evaluate_model_on_tasks(
+        #     model=matryoshka_model_1bit,
+        #     tasks=[task],
+        #     model_name='Matryoshka_1bit_non_quantized',
+        #     results_dir=results_dir
+        # )
+        # task_results['Matryoshka_1bit_non_quantized'] = results_matryoshka_1bit
         
         
     if "Matryoshka_2bit_3bit" in test_modules:
@@ -597,13 +597,13 @@ def main():
         "TRECCOVID"
     ]
     
-    tasks = [
-        'NFCorpus',
-        'TRECCOVID',
-        'ArguAna',
-        'SCIDOCS',
-        'SciFact'
-    ]
+    # tasks = [
+    #     'NFCorpus',
+    #     'TRECCOVID',
+    #     'ArguAna',
+    #     'SCIDOCS',
+    #     'SciFact'
+    # ]
 
     results_dir = 'mteb_evaluation_results'
     os.makedirs(results_dir, exist_ok=True)

@@ -8,6 +8,7 @@ from datasets import load_from_disk
 from datasets import load_dataset, DatasetDict, concatenate_datasets  
 import random  
 import datasets
+from config import nomic_ai_prefix_need
   
 class CombinedSimilarityDataset(Dataset):  
     """  
@@ -956,6 +957,10 @@ class CombinedSimilarityDataset(Dataset):
   
         text_a, text_b = self.samples[pair_idx]
         text = text_a if is_first_in_pair else text_b
+        
+        if nomic_ai_prefix_need:
+            text = ("search_query: " + text) if is_first_in_pair else ("search_document:: " + text)
+        
         assert isinstance(text, str)
 
         # Tokenize the text
