@@ -32,7 +32,7 @@ from mteb.abstasks.AbsTask import AbsTask
 from mteb.models.wrapper import Wrapper
 from mteb.encoder_interface import Encoder
 from MatryoshkaModel.matryoshka_2bit_model import MatryoshkaEmbeddingModel, CustomizedMatryoshkaEmbeddingModel
-from config import base_model_name, need_baselines, binary_baseline
+from config import base_model_name, need_baselines, binary_baseline, large_task_list
 
 from typing import List, Dict  
 import pandas as pd  
@@ -579,31 +579,34 @@ def main():
         "ESCIReranking",
     ]
     
-    tasks = [
-        "ArguAna",
-        "ClimateFEVER", 
-        "CQADupstackTexRetrieval",
-        "DBPedia",
-        "FEVER",
-        "FiQA2018",
-        "HotpotQA", 
-        "MSMARCO",
-        "NFCorpus",
-        "NQ",
-        "QuoraRetrieval",
-        "SCIDOCS",
-        "SciFact",
-        "Touche2020",
-        "TRECCOVID"
-    ]
+    if large_task_list:
     
-    # tasks = [
-    #     'NFCorpus',
-    #     'TRECCOVID',
-    #     'ArguAna',
-    #     'SCIDOCS',
-    #     'SciFact'
-    # ]
+        tasks = [
+            "ArguAna",
+            "ClimateFEVER", 
+            "CQADupstackTexRetrieval",
+            "DBPedia",
+            "FEVER",
+            "FiQA2018",
+            "HotpotQA", 
+            "MSMARCO",
+            "NFCorpus",
+            "NQ",
+            "QuoraRetrieval",
+            "SCIDOCS",
+            "SciFact",
+            "Touche2020",
+            "TRECCOVID"
+        ]
+    else:
+    
+        tasks = [
+            'NFCorpus',
+            'TRECCOVID',
+            'ArguAna',
+            'SCIDOCS',
+            'SciFact'
+        ]
 
     results_dir = 'mteb_evaluation_results'
     os.makedirs(results_dir, exist_ok=True)
