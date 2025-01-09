@@ -812,33 +812,71 @@ def quantization_regularization_loss(embeddings_dict: dict,
 
 
   
-def orthogonality_regularization(embeddings_dict: dict) -> torch.Tensor:  
-    """  
-    Compute orthogonality regularization to encourage uniqueness in added dimensions.  
-  
-    Args:  
-        embeddings_dict (dict): Dictionary of embeddings at different dimensions.  
-  
-    Returns:  
-        torch.Tensor: Scalar regularization loss.  
-    """  
-    reg_loss = 0.0  
-    dimensions = sorted(embeddings_dict.keys())  
-    for i in range(1, len(dimensions)):  
-        dim_prev = dimensions[i - 1]  
-        dim_curr = dimensions[i]  
-        emb_prev = embeddings_dict[dim_prev]  # Shape: (batch_size, dim_prev)  
-        emb_curr = embeddings_dict[dim_curr]  # Shape: (batch_size, dim_curr)  
-        # Extract the new dimensions added in emb_curr  
-        delta = emb_curr[:, dim_prev:]  # Shape: (batch_size, dim_curr - dim_prev)  
-        # normalize delta and emb_prev
-        delta = F.normalize(delta, p=2, dim=1)
-        emb_prev = F.normalize(emb_prev, p=2, dim=1)
-        # Compute the dot product between delta and emb_prev  
-        dot_product = torch.matmul(delta.T, emb_prev)  # Shape: (dim_curr - dim_prev, dim_prev)  
-        # Compute Frobenius norm of the dot product matrix  
-        reg_loss += torch.norm(dot_product, p='fro')  
-    return reg_loss  
+def orthogonality_regularization(embeddings_dict: dict) -> torch.Tensor:
+    """
+    Compute orthogonality regularization to encourage uniqueness across all dimensions.
+    
+    This function ensures that newly added dimensions are as orthogonal as possible to ALL 
+    previous dimensions, not just the most recent ones. This helps maintain the Matryoshka 
+    property where each level contains unique, non-redundant information.
+    
+    Simple explanation:
+    - For each dimension level, we want the new dimensions to be different (orthogonal) 
+      from ALL previous dimensions
+    - We do this by minimizing the dot product between new dimensions and all previous ones
+    - The more orthogonal two vectors are, the closer their dot product is to zero
+    
+    Mathematical details:
+    1. For dimension levels d₁, d₂, ..., dₙ where dᵢ < dᵢ₊₁:
+    2. For each level i > 1:
+       - Let δᵢ be the new dimensions added at level i: emb[dᵢ₋₁:dᵢ]
+       - For each previous level j < i:
+         - Let prevᵢ be the embeddings at level j: emb[:dⱼ]
+         - Compute dot product matrix: Mᵢⱼ = δᵢᵀ × prevⱼ
+         - Add ||Mᵢⱼ||_F to loss (Frobenius norm)
+    3. Total loss = Σᵢ Σⱼ₍₌₁ᵢ₋₁₎ ||Mᵢⱼ||_F
+    
+    Args:
+        embeddings_dict (dict): Dictionary mapping dimension sizes to embedding tensors
+                               Shape of each tensor: (batch_size, dimension)
+    
+    Returns:
+        torch.Tensor: Scalar regularization loss encouraging orthogonality across all levels
+    """
+    reg_loss = 0.0
+    dimensions = sorted(embeddings_dict.keys())
+    
+    # For each dimension level (except the first)
+    for i in range(1, len(dimensions)):
+        dim_curr = dimensions[i]
+        emb_curr = embeddings_dict[dim_curr]  # Shape: (batch_size, dim_curr)
+        
+        # Compare with ALL previous dimension levels
+        for j in range(i):
+            dim_prev = dimensions[j]
+            emb_prev = embeddings_dict[dim_prev]  # Shape: (batch_size, dim_prev)
+            
+            # Extract only the new dimensions added at current level
+            if j == i - 1:
+                # For immediate previous level
+                delta = emb_curr[:, dim_prev:]  # Shape: (batch_size, dim_curr - dim_prev)
+            else:
+                # For earlier levels, compare with dimensions added between levels
+                prev_end = dimensions[j+1]
+                delta = emb_curr[:, dim_prev:prev_end]  # Shape: (batch_size, prev_end - dim_prev)
+            
+            # Normalize both tensors for consistent dot product scale
+            delta = F.normalize(delta, p=2, dim=1)
+            emb_prev = F.normalize(emb_prev, p=2, dim=1)
+            
+            # Compute dot product matrix between new dimensions and previous embeddings
+            dot_product = torch.matmul(delta.T, emb_prev)  
+            # Shape: (new_dims, prev_dims)
+            
+            # Add Frobenius norm of dot product matrix to loss
+            reg_loss += torch.norm(dot_product, p='fro')
+            
+    return reg_loss
 
 
 def information_bottleneck_operator(embeddings_dict: dict) -> dict:  

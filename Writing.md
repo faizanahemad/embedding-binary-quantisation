@@ -4,6 +4,7 @@ Plots
 - Dimensions Normalized Performance plot for inference retrieval
 - Perf plot for 0.5, 1, 1.5, 2 bits as dimension increases with and without Matryoshka training.
 - Plots with actual wall clock time and memory usage and storage and FLOPS.
+- Perf plot as DIMs decreases for various configs like Matryoshka vs Non-Matryoska, for various quants.
 
 Others
 - Mutual Information for how much information is lost in quantization
