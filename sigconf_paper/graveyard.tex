@@ -1,0 +1,54 @@
+\subsection{Training and Evaluation}
+
+
+The training process involves several steps to enforce the Matryoshka property and optimize the quantization and embedding transformations. The overall training procedure is outlined in Algorithm~\ref{alg:training}.
+
+
+
+\begin{algorithm}[H]
+\small  % Reduce font size
+\caption{Training Procedure for Customized Matryoshka Embedding Model}
+\label{alg:training}
+\begin{algorithmic}[1]
+\Require Pretrained model $\mathcal{E}$, training data $\mathcal{D}$, epochs $N$, learning rate $\eta$, regularization strength $\lambda$, quantization bits $\{b_i\}$, Loss weights $\{w_{l}^{(i)} \mid i \in \mathcal{I}, l \in \mathcal{L}\}$
+\State Initialize Matryoshka Model $\mathcal{M}$ with $\mathcal{E}$ and initialize optimizer
+\For{epoch $= 1$ to $N$}
+    \For{each batch $(\mathbf{x}, \mathbf{y})$ in $\mathcal{D}$}
+        \State \textbf{1. Base Embeddings:} Compute $\mathbf{e} = \mathcal{E}(\mathbf{x})$, normalize $\mathbf{e} \leftarrow \mathbf{e} / \|\mathbf{e}\|$
+        \State \textbf{2. Transform:} $\{\mathbf{e}_{\text{non-quant}}^{(i)}\}$, $\{\mathbf{e}_{\text{quant}}^{(i)}\} = \mathcal{M}.\text{transformer}(\mathbf{e})$
+        \State \textbf{3. Compute Losses:} Initialize $\mathcal{L} \leftarrow 0$
+        \For{each dimension level $i$}
+            \State $\mathcal{L}_{\text{sim}}^{(i)} \leftarrow w^{(i)} \cdot \big( \mathcal{L}_{\text{sim}}(\mathbf{e}, \mathbf{e}_{\text{non-quant}}^{(i)}) + \mathcal{L}_{\text{sim}}(\mathbf{e}, \mathbf{e}_{\text{quant}}^{(i)}) \big)$
+            \State $\mathcal{L}_{\text{kl}}^{(i)} \leftarrow w^{(i)} \cdot \big( \mathcal{L}_{\text{kl}}(\mathbf{e}, \mathbf{e}_{\text{non-quant}}^{(i)}) + \mathcal{L}_{\text{kl}}(\mathbf{e}, \mathbf{e}_{\text{quant}}^{(i)}) \big)$
+            \State $\mathcal{L}_{\text{rank}}^{(i)} \leftarrow w^{(i)} \cdot \big( \mathcal{L}_{\text{rank}}(\mathbf{e}, \mathbf{e}_{\text{non-quant}}^{(i)}) + \mathcal{L}_{\text{rank}}(\mathbf{e}, \mathbf{e}_{\text{quant}}^{(i)}) \big)$
+            \State $\mathcal{L}_{\text{contrast}}^{(i)} \leftarrow w^{(i)} \cdot \big( \mathcal{L}_{\text{contrast}}(\mathbf{e}_{\text{non-quant}}^{(i)}) + \mathcal{L}_{\text{contrast}}(\mathbf{e}_{\text{quant}}^{(i)}) \big)$
+            \State $\mathcal{L} \leftarrow \mathcal{L} + \mathcal{L}_{\text{sim}}^{(i)} + \mathcal{L}_{\text{kl}}^{(i)} + \mathcal{L}_{\text{rank}}^{(i)} + \mathcal{L}_{\text{contrast}}^{(i)}$
+        \EndFor
+        
+        \State Add orthogonality loss: $\mathcal{L} \leftarrow \mathcal{L} + \lambda \cdot \mathcal{L}_{\text{ortho}}(\{\mathbf{e}_{\text{non-quant}}^{(i)}\})$
+        \State Add information bottleneck loss: $\mathcal{L} \leftarrow \mathcal{L} + \lambda \cdot \mathcal{L}_{\text{info}}(\{\mathbf{e}_{\text{non-quant}}^{(i)}\})$
+        \State Add quantization loss: $\mathcal{L} \leftarrow \mathcal{L} + \lambda \cdot \mathcal{L}_{\text{quant}}$
+        
+        \State \textbf{4. Optimize:} Backpropagate $\mathcal{L}$, update parameters and learning rate
+        \State \textbf{5. Update:} Adjust quantization thresholds with momentum
+    \EndFor
+\EndFor
+\State Compute final thresholds for Quantization Layers using data subset
+\State \Return $\mathcal{M}$
+\end{algorithmic}
+\end{algorithm}
+
+We define a weight for each loss category \(l\) and each dimension level \(i\), denoted by \(w_l^{(i)}\). Collectively, these weights are written as $\{ w_l^{(i)} \mid i \in \mathcal{I}, l \in \mathcal{L} \}.$.
+Here, \(\mathcal{I}\) is the set of dimension levels and \(\mathcal{L}\) is the set of loss categories.
+
+We initialize the quantization thresholds using percentile-based statistics from the embedding distribution and update them using momentum during training.
+We used the AdamW optimizer~\cite{loshchilov2017decoupled} with weight decay. The learning rate was set to $\eta = 1 \times 10^{-4}$, and a learning rate scheduler with warm-up steps was employed. Gradient clipping was applied to enhance training stability.
+We set the number of epochs $N$ to 5, although we observed convergence in fewer epochs due to the efficient loss functions. We aggregate the results across all datasets for comparison with baselines.
+
+
+We used the Normalized Discounted Cumulative Gain at rank 10 (NDCG@10) as our primary evaluation metric. 
+% NDCG@10 assesses the quality of the ranking of the top 10 retrieved documents by considering both the relevance levels of the documents and their positions in the ranked list. 
+For a query q, NDCG@10 is computed as:
+$\text{NDCG@10} = \frac{\text{DCG@10}}{\text{IDCG@10}} = \frac{\sum_{i=1}^{10} \frac{2^{rel_i} - 1}{\log_2(i+1)}}{\sum_{i=1}^{10} \frac{2^{rel_i^*} - 1}{\log_2(i+1)}}$
+
+where $rel_i$ is the relevance score of the document at position $i$ in the ranked list, and $rel_i^*$ is the relevance score of the document at position $i$ in the ideal ranking. The denominator IDCG@10 normalizes the score to [0,1], with 1 indicating perfect ranking.

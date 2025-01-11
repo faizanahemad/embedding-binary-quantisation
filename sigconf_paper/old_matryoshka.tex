@@ -1,0 +1,230 @@
+\subsubsection{Information Distribution and Dimensional Control}
+The training process employs three key mechanisms to control information distribution across dimensions and prevent embedding collapse:
+
+\paragraph{Information Bottleneck Control}
+To concentrate information in early dimensions, we apply a progressive bottleneck mechanism that increases in strength with dimension index:
+
+\begin{equation}
+    \mathcal{L}_{\text{ib}} = \sum_{i=1}^{n} w_i \cdot f(|\mathbf{x}_i|)
+\end{equation}
+
+where $w_i$ increases linearly with dimension index, and $f(x)$ is our specialized bottleneck function:
+
+\begin{equation}
+    f(x) = \left(\frac{|x|^2}{x_0 + |x|}\right)^\alpha
+\end{equation}
+
+This formulation is crucial as it creates a strong gradient push towards zero even for small values ($x \approx 0$), unlike traditional L1 or L2 regularization. The parameter $\alpha$ (typically 0.3) controls the strength of the push, while $x_0$ (typically 0.1) determines the threshold below which the push becomes particularly strong. This ensures complete suppression of less important dimensions rather than mere reduction in magnitude.
+
+\begin{figure}[h]
+    \centering
+    %\includegraphics[width=0.8\linewidth]{figures/bottleneck_function.pdf}
+    \caption{Comparison of bottleneck function $f(x)$ with traditional L1 regularization, showing stronger gradients near zero.}
+    \label{fig:bottleneck_function}
+\end{figure}
+
+\paragraph{Orthogonal Information Encoding}
+To ensure different dimension groups encode distinct information patterns, we enforce orthogonality between successive dimension groups:
+
+\begin{equation}
+    \mathcal{L}_{\text{orth}} = \sum_{i=1}^{k-1} \|\mathbf{\Delta}_i^T \cdot \text{normalize}(\mathbf{E}_i)\|_F
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\mathbf{E}_i$ represents embeddings up to dimension group $i$
+    \item $\mathbf{\Delta}_i$ represents the new dimensions added in group $i+1$
+    \item $\|\cdot\|_F$ denotes the Frobenius norm
+\end{itemize}
+
+This mechanism ensures that each new group of dimensions (e.g., dimensions 129-256) captures information patterns orthogonal to those captured by previous groups (e.g., dimensions 1-128), leading to efficient information distribution across the embedding space.
+
+\paragraph{Dynamic Variance Control}
+To prevent embedding collapse while allowing selective dimension suppression, we implement a time-dependent variance control mechanism:
+
+\begin{equation}
+    \mathcal{L}_{\text{var}}(t) = w(t) \sum_{d} \exp(-\sigma_d)
+\end{equation}
+
+where:
+\begin{equation}
+    w(t) = \max(0.2, \frac{e^{t/T} - 1}{e - 1})
+\end{equation}
+
+Here, $\sigma_d$ is the standard deviation of dimension $d$, $t$ is the current training step, and $T$ is the total number of training steps. This mechanism:
+\begin{itemize}
+    \item Counterbalances the information bottleneck's compression effect
+    \item Gradually increases in strength during training
+    \item Maintains meaningful embedding magnitudes in important dimensions
+    \item Allows selective dimension suppression where appropriate
+\end{itemize}
+
+The combined effect of these three mechanisms creates a carefully balanced training dynamic where:
+\begin{enumerate}
+    \item Early dimensions maintain robust, distinct information patterns
+    \item Later dimensions are selectively suppressed when redundant
+    \item Different dimension groups capture complementary information
+    \item Embedding magnitudes remain meaningful rather than collapsing
+\end{enumerate}
+
+\begin{figure}[h]
+    \centering
+    %\includegraphics[width=\linewidth]{figures/dimension_control.pdf}
+    \caption{Visualization of dimension control mechanisms showing (a) Information bottleneck strength across dimensions, (b) Orthogonality between dimension groups, and (c) Variance evolution during training.}
+    \label{fig:dimension_control}
+\end{figure}
+
+
+\subsection{Matryoshka Representation Learning}
+\label{subsec:matryoshka}
+
+Our approach adapts and extends the Matryoshka representation learning paradigm with several key innovations. We implement a specialized architecture that combines dimensional slicing, multi-scale losses, and efficient transformation networks to create nested embeddings optimized for quantization.
+
+\subsubsection{Architecture Overview}
+
+The core of our system is the MatryoshkaTransformer, which transforms input embeddings $\mathbf{x} \in \mathbb{R}^d$ into a series of nested representations at different dimension levels $D = \{d_1, d_2, ..., d_K\}$ where $d_1 < d_2 < ... < d_K = d$.
+
+\paragraph{Base Transformation}
+We first apply a base transformation using a lightweight yet effective feed-forward network:
+
+\begin{equation}
+    \mathbf{h} = \text{FFN}(\mathbf{x}) = W_2(\text{GELU}(\text{RMSNorm}(W_1\mathbf{x})))
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $W_1 \in \mathbb{R}^{32d \times d}$ expands the representation
+    \item RMSNorm provides stable training
+    \item $W_2 \in \mathbb{R}^{d \times 32d}$ projects back to original dimension
+\end{itemize}
+
+\paragraph{Progressive Dimension Slicing}
+Unlike traditional Matryoshka implementations that use separate projections, we employ a progressive slicing mechanism:
+
+\begin{equation}
+    \mathbf{y}_k = \text{Slice}_{d_{k-1}}^{d_k}(\mathbf{h})
+\end{equation}
+
+where $\text{Slice}_{a}^{b}$ extracts dimensions $[a:b]$. The full embedding at level $k$ is then:
+
+\begin{equation}
+    \mathbf{e}_k = [\mathbf{y}_1; \mathbf{y}_2; ...; \mathbf{y}_k]
+\end{equation}
+
+This ensures the nested property is maintained by construction rather than through additional constraints.
+
+\subsubsection{Multi-Scale Training}
+
+Our training process applies all loss components at each dimension scale, with dimension-specific weighting:
+
+\begin{equation}
+    \mathcal{L}_{\text{total}} = \sum_{d \in D} w_d(\mathcal{L}_{\text{sim}}^d + \mathcal{L}_{\text{kl}}^d + \lambda_1\mathcal{L}_{\text{contrast}}^d + \lambda_2\mathcal{L}_{\text{rank}}^d)
+\end{equation}
+
+where $w_d = \sqrt{d}$ scales the loss to account for increasing dimension sizes.
+
+\paragraph{Similarity Preservation}
+The total similarity preservation loss for a given scale is:
+
+\begin{equation}
+    \mathcal{L}_{\text{total}}^d = w_d(\mathcal{L}_{\text{sim}}^d + \mathcal{L}_{\text{kl}}^d + \lambda_{\text{rank}}\mathcal{L}_{\text{rank}}^d)
+\end{equation}
+
+At each scale $d$, we compute:
+
+\begin{equation}
+    \mathcal{L}_{\text{sim}}^d = \|\text{cos}(\mathbf{e}_d, \mathbf{e}_d') - \text{cos}(\mathbf{x}, \mathbf{x}')\|_2^2
+\end{equation}
+
+\paragraph{KL Divergence}
+To preserve probability distributions of similarities:
+
+\begin{equation}
+    \mathcal{L}_{\text{kl}}^d = D_{\text{KL}}(P_d \| Q_d)
+\end{equation}
+
+where $P_d$ and $Q_d$ are similarity distributions at dimension $d$.
+
+\paragraph{Contrastive Learning}
+We implement a temperature-scaled contrastive loss at each scale:
+
+\begin{equation}
+    \mathcal{L}_{\text{contrast}}^d = -\log\frac{\exp(s_p^d/\tau)}{\exp(s_p^d/\tau) + \sum_{n}\exp(s_n^d/\tau)}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $s_p^d$ is similarity between positive pairs at dimension $d$
+    \item $s_n^d$ are similarities with negative samples
+    \item $\tau$ is the temperature parameter (typically 0.07)
+\end{itemize}
+
+\paragraph{Rank Preservation}
+To maintain ordering of similarities:
+
+\begin{equation}
+    \mathcal{L}_{\text{rank}}^d = \sum_{i,j,k} [\delta - (s_{ij}^d - s_{ik}^d)]_+
+\end{equation}
+
+where $s_{ij}^d$ is the similarity between embeddings $i$ and $j$ at dimension $d$.
+
+\subsubsection{Integration with Quantization}
+
+A key innovation in our approach is the tight integration of Matryoshka learning with quantization. At each dimension level $d$, we apply:
+
+\begin{equation}
+    \mathbf{q}_d = Q_d(\text{normalize}(\mathbf{e}_d))
+\end{equation}
+
+where $Q_d$ is the appropriate quantization function (2-bit, 1.5-bit, or binary), and normalization ensures unit length. This creates a hierarchy of quantized representations:
+
+\begin{equation}
+    \{\mathbf{q}_d \in \{0,1\}^{m_d} | d \in D\}
+\end{equation}
+
+where $m_d$ is the number of bits needed for the quantized representation at dimension $d$.
+
+\begin{figure}[h]
+    \centering
+    %\includegraphics[width=\linewidth]{figures/matryoshka_quantization.pdf}
+    \caption{Integration of Matryoshka learning with progressive quantization. The architecture shows how embeddings at each dimension level are normalized and quantized while maintaining the nested structure.}
+    \label{fig:matryoshka_quantization}
+\end{figure}
+
+\subsubsection{Training Process}
+
+The complete training process involves:
+
+1. \textbf{Forward Pass:}
+   \begin{itemize}
+       \item Apply base transformation
+       \item Generate nested representations through slicing
+       \item Normalize and quantize at each dimension level
+   \end{itemize}
+
+2. \textbf{Loss Computation:}
+   \begin{itemize}
+       \item Calculate all loss components at each scale
+       \item Apply dimension-specific weights
+       \item Combine with regularization terms
+   \end{itemize}
+
+3. \textbf{Optimization:}
+   \begin{itemize}
+       \item Update base transformation parameters
+       \item Adjust quantization thresholds
+       \item Balance information distribution across dimensions
+   \end{itemize}
+
+This integrated approach ensures that the learned representations are simultaneously:
+\begin{itemize}
+    \item Nested (accessible at multiple scales) and follow the Matryoshka principle
+    \item Quantization-friendly
+\end{itemize}
+
+\begin{figure}[h]
+    \centering
+    %\includegraphics[width=0.8\linewidth]{figures/matryoshka_structure.pdf}
+    \caption{Matryoshka embedding structure showing nested representation levels.}
+    \label{fig:matryoshka_structure}
+\end{figure}

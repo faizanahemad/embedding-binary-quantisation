@@ -1,0 +1,542 @@
+\documentclass{article}  
+\usepackage{amsmath, amssymb, geometry, hyperref}  
+\geometry{margin=1in}  
+\begin{document}  
+  
+\title{A Detailed Comparison Between MINILM and ModernBERT}  
+\author{}  
+\date{}  
+\maketitle  
+  
+\tableofcontents  
+  
+\section{Introduction}  
+  
+In recent years, Transformer-based models have revolutionized the field of Natural Language Processing (NLP). Two such models that have garnered significant attention are \textbf{MINILM} and \textbf{ModernBERT}.   
+  
+\begin{itemize}  
+    \item \textbf{MINILM} (\emph{Miniature Language Model}) is a model compression technique developed by Microsoft Research \cite{wang2020minilm}. It aims to reduce the size and computational requirements of large pre-trained Transformer models like BERT while retaining most of their performance.  
+    \item \textbf{ModernBERT} is a next-generation encoder-only Transformer model developed by Answer.AI, LightOn, and collaborators. It is designed as a modern replacement for BERT, incorporating recent advancements in Transformer architectures to improve efficiency and performance.  
+\end{itemize}  
+  
+This document provides an extensive comparison between MINILM and ModernBERT, highlighting their similarities, differences, architectural designs, training methodologies, parameter sizes, and other relevant aspects.  
+  
+\section{Architectural Differences}  
+  
+\subsection{MINILM Architecture}  
+  
+MINILM focuses on compressing existing large Transformer models into smaller ones through a novel distillation process called \textbf{Deep Self-Attention Distillation}. The key aspects of MINILM's architecture are:  
+  
+\begin{itemize}  
+    \item \textbf{Student-Teacher Framework}: MINILM employs a student-teacher training paradigm where the student model learns to mimic the self-attention behaviors of the teacher model.  
+    \item \textbf{Self-Attention Distillation}: The distillation focuses on the \emph{last Transformer layer}'s self-attention module, allowing the student to capture critical attention patterns without requiring layer-to-layer mapping.  
+    \item \textbf{Flexibility in Architecture}: Since it does not require strict layer-wise alignment, the student model can have fewer layers and different hidden dimensions compared to the teacher.  
+    \item \textbf{Value-Relation Transfer}: Introduces the scaled dot-product between values as a form of knowledge transfer, independent of the hidden dimensions.  
+\end{itemize}  
+  
+\subsection{ModernBERT Architecture}  
+  
+ModernBERT introduces a series of architectural innovations to build an efficient and powerful encoder-only Transformer model:  
+  
+\begin{itemize}  
+    \item \textbf{Extended Context Length}: Supports a context length of up to 8,192 tokens, significantly exceeding BERT's 512-token limit.  
+    \item \textbf{Rotary Positional Embeddings (RoPE)}: Utilizes RoPE to encode positional information, enhancing the model's ability to handle long sequences.  
+    \item \textbf{Alternating Attention Mechanism}:  
+    \begin{itemize}  
+        \item \textbf{Global Attention}: Every third layer uses global attention, where each token attends to all tokens.  
+        \item \textbf{Local Attention}: Other layers use local attention with sliding windows, where tokens attend only to neighboring tokens within a fixed window size.  
+    \end{itemize}  
+    \item \textbf{GeGLU Activation Functions}: Replaces standard feed-forward networks with Gated Linear Units (GLUs), specifically the GeGLU variant, to enhance performance.  
+    \item \textbf{Pre-Normalization}: Applies layer normalization before the self-attention and feed-forward sub-layers to improve training stability.  
+    \item \textbf{Bias Removal}: Removes bias terms from linear and normalization layers, except for the final output layer, to allocate more parameter capacity to core computations.  
+\end{itemize}  
+  
+\section{Training Methodologies}  
+  
+\subsection{MINILM Training}  
+  
+MINILM's training process is centered around distillation:  
+  
+\begin{itemize}  
+    \item \textbf{Deep Self-Attention Distillation}: The student model learns to mimic the self-attention distributions and value relations of the teacher model's last layer.  
+    \item \textbf{Knowledge Transfer Objectives}:  
+    \begin{align}  
+        L_{\text{AT}} &= \frac{1}{h n} \sum_{i=1}^{h} \sum_{j=1}^{n} D_{\text{KL}}\left( A^T_{i,j} \,\|\, A^S_{i,j} \right) \\  
+        L_{\text{VR}} &= \frac{1}{h n} \sum_{i=1}^{h} \sum_{j=1}^{n} D_{\text{KL}}\left( VRT^T_{i,j} \,\|\, VRT^S_{i,j} \right) \\  
+        L &= L_{\text{AT}} + L_{\text{VR}}  
+    \end{align}  
+    where:  
+    \begin{itemize}  
+        \item $h$ is the number of attention heads.  
+        \item $n$ is the sequence length.  
+        \item $A^T_{i,j}$ and $A^S_{i,j}$ are the attention distributions of the teacher and student, respectively.  
+        \item $VRT$ represents the value-relation matrices.  
+        \item $D_{\text{KL}}$ is the Kullback-Leibler divergence.  
+    \end{itemize}  
+    \item \textbf{Teacher Assistant Strategy}: For significant size differences between teacher and student, an intermediate \emph{teacher assistant} model is used to facilitate better knowledge transfer.  
+    \item \textbf{Task-Agnostic Compression}: The student model is pre-trained using the distillation objectives and can be fine-tuned on downstream tasks without further distillation.  
+\end{itemize}  
+  
+\subsection{ModernBERT Training}  
+  
+ModernBERT's training involves large-scale pre-training and specialized adaptation phases:  
+  
+\begin{itemize}  
+    \item \textbf{Pre-Training Phases}:  
+    \begin{enumerate}  
+        \item \textbf{Initial Training Phase}:  
+        \begin{itemize}  
+            \item \textbf{Sequence Length}: 1,024 tokens.  
+            \item \textbf{Tokens Processed}: 1.7 trillion.  
+            \item \textbf{Optimizer}: StableAdamW.  
+            \item \textbf{Learning Rate Schedule}: Warmup-Stable-Decay (WSD).  
+        \end{itemize}  
+        \item \textbf{Long-Context Adaptation Phase}:  
+        \begin{itemize}  
+            \item \textbf{Sequence Length}: Extended to 8,192 tokens.  
+            \item \textbf{Tokens Processed}: 250 billion.  
+            \item \textbf{Adjustments}: Batch size reduced to maintain consistent tokens per batch.  
+        \end{itemize}  
+        \item \textbf{Final Annealing Phase}:  
+        \begin{itemize}  
+            \item \textbf{Tokens Processed}: 50 billion.  
+            \item \textbf{Objective}: Refine the model with emphasis on stability and performance.  
+        \end{itemize}  
+    \end{enumerate}  
+    \item \textbf{Data Mix}: Trained on a diverse corpus including web text, code, and scientific literature.  
+    \item \textbf{Sequence Packing}: Efficiently packs sequences to optimize batch processing.  
+    \item \textbf{Optimizer and Scheduling}:  
+    \begin{itemize}  
+        \item \textbf{Optimizer}: StableAdamW combines benefits of AdamW and Adafactor.  
+        \item \textbf{Learning Rate Schedule}: Warmup-Stable-Decay (WSD) helps in gradual warmup, stable training, and controlled decay.  
+    \end{itemize}  
+\end{itemize}  
+  
+\section{Data and Training Corpus}  
+  
+\subsection{MINILM Data}  
+  
+MINILM is pre-trained on standard corpora:  
+  
+\begin{itemize}  
+    \item \textbf{English Wikipedia}  
+    \item \textbf{BookCorpus} \cite{zhu2015aligning}  
+\end{itemize}  
+  
+\subsection{ModernBERT Data}  
+  
+ModernBERT utilizes a much larger and diverse training corpus:  
+  
+\begin{itemize}  
+    \item \textbf{Total Tokens}: 2 trillion tokens.  
+    \item \textbf{Sources}:  
+    \begin{itemize}  
+        \item \textbf{Web Data}: Diverse English text from the internet.  
+        \item \textbf{Code Data}: Extensive code repositories to enhance code understanding.  
+        \item \textbf{Scientific Literature}  
+    \end{itemize}  
+    \item \textbf{Tokenizer}: Modern Byte-Pair Encoding (BPE) tokenizer with a vocabulary size of 50,368 tokens.  
+\end{itemize}  
+  
+\section{Parameter Sizes}  
+  
+\subsection{MINILM Parameter Sizes}  
+  
+Examples of MINILM model configurations:  
+  
+\begin{itemize}  
+    \item \textbf{MINILM-L12-H384}:  
+    \begin{itemize}  
+        \item \textbf{Layers}: 12  
+        \item \textbf{Hidden Size}: 384  
+        \item \textbf{Parameters}: Approximately 33 million  
+    \end{itemize}  
+    \item \textbf{MINILM-L6-H384}:  
+    \begin{itemize}  
+        \item \textbf{Layers}: 6  
+        \item \textbf{Hidden Size}: 384  
+        \item \textbf{Parameters}: Approximately 22 million  
+    \end{itemize}  
+\end{itemize}  
+  
+\subsection{ModernBERT Parameter Sizes}  
+  
+ModernBERT offers two main variants:  
+  
+\begin{itemize}  
+    \item \textbf{ModernBERT-base}:  
+    \begin{itemize}  
+        \item \textbf{Layers}: 22  
+        \item \textbf{Parameters}: Approximately 149 million  
+        \item \textbf{Hidden Size}: Not specified, but optimized for performance and efficiency  
+    \end{itemize}  
+    \item \textbf{ModernBERT-large}:  
+    \begin{itemize}  
+        \item \textbf{Layers}: 28  
+        \item \textbf{Parameters}: Approximately 395 million  
+        \item \textbf{Hidden Size}: Larger than base model for enhanced capacity  
+    \end{itemize}  
+\end{itemize}  
+  
+\section{Compute and Efficiency Aspects}  
+  
+\subsection{MINILM Efficiency}  
+  
+\begin{itemize}  
+    \item \textbf{Inference Speed}: MINILM models are up to 2x faster than the original teacher models due to reduced layers and parameters.  
+    \item \textbf{Memory Consumption}: Significantly lower memory requirements enable deployment on resource-constrained devices.  
+    \item \textbf{Training Efficiency}: Distillation focuses on the last layer, reducing the complexity and time required for training.  
+\end{itemize}  
+  
+\subsection{ModernBERT Efficiency}  
+  
+ModernBERT incorporates several efficiency optimizations:  
+  
+\begin{itemize}  
+    \item \textbf{Unpadding Technique}: Removes padding tokens to reduce unnecessary computations.  
+    \item \textbf{Flash Attention}: Employs memory-efficient attention mechanisms.  
+    \item \textbf{Hardware Optimization}: Designed to maximize GPU utilization across various hardware, including NVIDIA T4, A100, and RTX 4090.  
+    \item \textbf{Processing Speed}: Processes long-context inputs 2-3 times faster than competing models.  
+\end{itemize}  
+  
+\section{Similarities and Differences}  
+  
+\subsection{Similarities}  
+  
+\begin{itemize}  
+    \item \textbf{Transformer-Based Models}: Both MINILM and ModernBERT are based on the Transformer architecture.  
+    \item \textbf{Goal of Efficiency}: Both aim to improve efficiency, either by reducing model size (MINILM) or optimizing architecture and training (ModernBERT).  
+    \item \textbf{Use of Advanced Techniques}: Each incorporates modern techniques to enhance performance (e.g., MINILM's deep self-attention distillation, ModernBERT's RoPE embeddings).  
+\end{itemize}  
+  
+\subsection{Differences}  
+  
+\begin{itemize}  
+    \item \textbf{Approach}:  
+    \begin{itemize}  
+        \item \textbf{MINILM}: Focuses on compressing existing large models via distillation.  
+        \item \textbf{ModernBERT}: Builds a new architecture from scratch, incorporating modern advancements.  
+    \end{itemize}  
+    \item \textbf{Architectural Innovations}:  
+    \begin{itemize}  
+        \item MINILM does not introduce new architectural components but compresses existing ones.  
+        \item ModernBERT introduces several innovations like RoPE, alternating attention, and GeGLU.  
+    \end{itemize}  
+    \item \textbf{Training Data}:  
+    \begin{itemize}  
+        \item MINILM is trained on standard corpora like Wikipedia and BookCorpus.  
+        \item ModernBERT uses a much larger and more diverse dataset, including code and scientific texts.  
+    \end{itemize}  
+    \item \textbf{Parameter Sizes}:  
+    \begin{itemize}  
+        \item MINILM models are significantly smaller, with parameter sizes ranging from 22 million to 33 million.  
+        \item ModernBERT models are larger, with base and large variants at 149 million and 395 million parameters, respectively.  
+    \end{itemize}  
+    \item \textbf{Context Length}:  
+    \begin{itemize}  
+        \item MINILM does not substantially extend context length beyond standard models.  
+        \item ModernBERT supports very long contexts up to 8,192 tokens.  
+    \end{itemize}  
+\end{itemize}  
+  
+\section{Conclusion}  
+  
+MINILM and ModernBERT both contribute significantly to the advancement of Transformer-based models but approach efficiency and performance from different angles. MINILM provides a solution for compressing large models into smaller, more deployable versions without substantial loss in performance. In contrast, ModernBERT reconstructs the Transformer architecture with modern techniques to create a model that is both efficient and capable of handling long-context tasks.  
+  
+Their differences in architecture, training methodologies, data used, parameter sizes, and efficiency optimizations reflect their distinct goals and design philosophies. Understanding these differences is crucial for selecting the appropriate model for specific applications or further research.  
+  
+\bibliographystyle{plain}  
+\begin{thebibliography}{10}  
+  
+\bibitem{wang2020minilm}  
+Wenhui Wang, Furu Wei, Li~Dong, Hangbo Bao, Nan Yang, and Ming Zhou.  
+\newblock {MINILM}: Deep self-attention distillation for task-agnostic compression of pre-trained transformers.  
+\newblock In \emph{Advances in Neural Information Processing Systems}, volume~33, pages 5776--5788. 2020.  
+  
+\bibitem{zhu2015aligning}  
+Yukun Zhu, Ryan Kiros, Richard Zemel, Ruslan Salakhutdinov, Raquel Urtasun, Antonio Torralba, and Sanja Fidler.  
+\newblock Aligning books and movies: Towards story-like visual explanations by watching movies and reading books.  
+\newblock In \emph{Proceedings of the IEEE International Conference on Computer Vision}, pages 19--27. 2015.  
+  
+\end{thebibliography}  
+  
+\end{document}  
+
+
+\documentclass{article}  
+\usepackage{amsmath, amssymb, geometry, hyperref}  
+\geometry{margin=1in}  
+\begin{document}  
+\title{Training Methodologies for Embeddings in ModernBERT and MiniLM}  
+\author{}  
+\date{}  
+\maketitle  
+\tableofcontents  
+\section{Introduction}  
+Embeddings play a crucial role in Natural Language Processing (NLP) tasks, as they convert textual data into numerical representations that models can process. Two prominent models used for generating embeddings are \textbf{ModernBERT} and \textbf{MiniLM}. This document provides an in-depth explanation of how these models are trained for embeddings, including their methodologies, architectures, and training objectives.  
+  
+\section{ModernBERT Embedding Training}  
+ModernBERT is a next-generation encoder-only Transformer model designed to handle long-context scenarios efficiently. The embedding training process for ModernBERT involves several stages:  
+  
+\subsection{Model Architecture Adaptations}  
+ModernBERT introduces architectural innovations to accommodate long sequences and improve embedding quality:  
+  
+\begin{itemize}  
+    \item \textbf{Extended Context Length}: Supports sequences up to 8192 tokens.  
+    \item \textbf{Rotary Positional Embeddings (RoPE)}: Utilizes RoPE to encode positional information effectively over long sequences.  
+    \item \textbf{Alternating Attention Mechanism}:  
+    \begin{itemize}  
+        \item \textbf{Global Attention}: Every third layer uses global attention, allowing tokens to attend to all other tokens.  
+        \item \textbf{Local Attention}: Other layers use local attention with a fixed window size, enhancing efficiency.  
+    \end{itemize}  
+    \item \textbf{Activation Functions}: Employs \textbf{GeGLU} activation functions in feed-forward networks.  
+    \item \textbf{Bias Removal}: Eliminates bias terms from linear and normalization layers to allocate parameter capacity more effectively.  
+    \item \textbf{Pre-Normalization}: Applies Layer Normalization before attention and feed-forward sub-layers for training stability.  
+\end{itemize}  
+  
+\subsection{Training Data}  
+The training data for ModernBERT embeddings is extensive and diverse:  
+  
+\begin{itemize}  
+    \item \textbf{Total Tokens}: Approximately 2 trillion tokens.  
+    \item \textbf{Data Sources}:  
+    \begin{itemize}  
+        \item \textbf{Web Text}: Diverse English web documents.  
+        \item \textbf{Code Data}: Source code from various repositories, enhancing code understanding capabilities.  
+        \item \textbf{Scientific Literature}: Papers and articles to improve comprehension of technical content.  
+    \end{itemize}  
+    \item \textbf{Tokenizer}: Uses a modern Byte-Pair Encoding (BPE) tokenizer with a vocabulary size of 50,368 tokens.  
+\end{itemize}  
+  
+\subsection{Training Procedure}  
+The training of ModernBERT for embeddings involves a multi-stage process:  
+  
+\subsubsection{Masked Language Modeling Pre-training}  
+Initially, ModernBERT undergoes Masked Language Modeling (MLM) pre-training:  
+  
+\begin{itemize}  
+    \item \textbf{Objective}: Predict masked tokens in a sequence, helping the model learn contextual representations.  
+    \item \textbf{Sequence Length}: Starts with sequences of 1024 tokens.  
+    \item \textbf{Optimization}:  
+    \begin{itemize}  
+        \item \textbf{Optimizer}: StableAdamW optimizer.  
+        \item \textbf{Learning Rate Schedule}: Warmup-Stable-Decay (WSD).  
+    \end{itemize}  
+\end{itemize}  
+  
+\subsubsection{Long-Context Adaptation Phase}  
+To adapt the model to longer sequences:  
+  
+\begin{itemize}  
+    \item \textbf{Sequence Length Extension}: Increased to 8192 tokens.  
+    \item \textbf{Tokens Processed}: An additional 250 billion tokens.  
+    \item \textbf{Adjustments}: Batch sizes are reduced to maintain computational feasibility.  
+\end{itemize}  
+  
+\subsubsection{Unsupervised Contrastive Learning}  
+ModernBERT employs unsupervised contrastive learning to enhance embedding quality:  
+  
+\begin{itemize}  
+    \item \textbf{Objective}: Learn embeddings such that similar texts are closer in the embedding space, while dissimilar texts are farther apart.  
+    \item \textbf{Contrastive Loss Function}: The InfoNCE loss is commonly used:  
+  
+    $$  
+    L = -\log \frac{\exp(\text{sim}(\mathbf{h}_q, \mathbf{h}_d^+)/\tau)}{\sum_{i=1}^{N} \exp(\text{sim}(\mathbf{h}_q, \mathbf{h}_d^i)/\tau)}  
+    $$  
+  
+    Where:  
+  
+    \begin{itemize}  
+        \item $\mathbf{h}_q$: Embedding of the query text.  
+        \item $\mathbf{h}_d^+$: Embedding of the positive (similar) document.  
+        \item $\mathbf{h}_d^i$: Embeddings of negative (dissimilar) documents.  
+        \item $\text{sim}(\cdot, \cdot)$: Similarity function, often cosine similarity.  
+        \item $\tau$: Temperature parameter scaling the logits.  
+        \item $N$: Number of negatives in the batch.  
+    \end{itemize}  
+\end{itemize}  
+  
+\subsubsection{Supervised Fine-Tuning}  
+ModernBERT is further fine-tuned on supervised datasets to improve performance:  
+  
+\begin{itemize}  
+    \item \textbf{Datasets Used}:  
+    \begin{itemize}  
+        \item MS MARCO  
+        \item Natural Questions (NQ)  
+        \item Stanford Natural Language Inference (SNLI)  
+        \item FEVER  
+        \item HotpotQA  
+    \end{itemize}  
+    \item \textbf{Hard Negative Mining}:  
+    \begin{itemize}  
+        \item For retrieval tasks, hard negatives are mined by selecting challenging non-matching examples.  
+        \item Enhances the model's ability to discriminate between closely related but non-identical texts.  
+    \end{itemize}  
+    \item \textbf{Training Details}:  
+    \begin{itemize}  
+        \item \textbf{Optimizer}: Often continues with StableAdamW.  
+        \item \textbf{Learning Rate}: Adjusted for fine-tuning.  
+        \item \textbf{Batch Size}: May vary depending on computational resources.  
+    \end{itemize}  
+\end{itemize}  
+  
+\subsubsection{Use of Task-Specific Prefixes}  
+To guide the model during training:  
+  
+\begin{itemize}  
+    \item \textbf{Prefixes Added to Inputs}:  
+    \begin{itemize}  
+        \item "search query: "  
+        \item "search document: "  
+        \item "classification: "  
+        \item "clustering: "  
+    \end{itemize}  
+    \item \textbf{Purpose}: Helps the model distinguish between different types of inputs and tasks.  
+\end{itemize}  
+  
+\section{MiniLM Embedding Training}  
+MiniLM is a model designed to provide efficient, lightweight embeddings without significant performance loss.  
+  
+\subsection{Model Architecture}  
+MiniLM compresses larger Transformer models into smaller ones:  
+  
+\begin{itemize}  
+    \item \textbf{Student-Teacher Framework}: A smaller student model is trained to mimic the behaviors of a larger teacher model.  
+    \item \textbf{Layers and Dimensions}:  
+    \begin{itemize}  
+        \item Common configurations include 6 layers with a hidden size of 384.  
+        \item Results in models with approximately 22 million parameters.  
+    \end{itemize}  
+\end{itemize}  
+  
+\subsection{Training Data}  
+MiniLM is trained on large-scale datasets:  
+  
+\begin{itemize}  
+    \item \textbf{Datasets Used}:  
+    \begin{itemize}  
+        \item General corpora like Wikipedia and BookCorpus.  
+        \item Specific datasets like MS MARCO for passage retrieval.  
+        \item Diverse sources totaling over 1 billion sentence pairs.  
+    \end{itemize}  
+\end{itemize}  
+  
+\subsection{Training Procedure}  
+The embedding training of MiniLM involves several key steps:  
+  
+\subsubsection{Pre-training}  
+MiniLM leverages pre-trained models as a starting point:  
+  
+\begin{itemize}  
+    \item \textbf{Initialization}: Uses models like `nreimers/MiniLM-L6-H384-uncased` as a base.  
+    \item \textbf{Objective}: Retain the general language understanding learned during pre-training.  
+\end{itemize}  
+  
+\subsubsection{Contrastive Fine-Tuning}  
+The model is fine-tuned using a contrastive learning objective:  
+  
+\begin{itemize}  
+    \item \textbf{Objective}: Given a sentence, predict the matching sentence from a set of candidates.  
+    \item \textbf{Contrastive Loss Function}:  
+  
+    $$  
+    L = -\sum_{i=1}^{N} \log \frac{\exp(\text{sim}(\mathbf{h}_i, \mathbf{h}_i^+)/\tau)}{\sum_{j=1}^{N} \exp(\text{sim}(\mathbf{h}_i, \mathbf{h}_j)/\tau)}  
+    $$  
+  
+    Where:  
+  
+    \begin{itemize}  
+        \item $\mathbf{h}_i$: Embedding of the $i$-th sentence.  
+        \item $\mathbf{h}_i^+$: Embedding of the positive pair for the $i$-th sentence.  
+        \item $\mathbf{h}_j$: Embeddings of other sentences in the batch (negatives).  
+        \item $\tau$: Temperature parameter.  
+        \item $N$: Batch size.  
+    \end{itemize}  
+    \item \textbf{Batch Size}: Large batch sizes (e.g., 1024) are used to include more negative samples.  
+    \item \textbf{Training Details}:  
+    \begin{itemize}  
+        \item \textbf{Optimizer}: AdamW with learning rates such as $2 \times 10^{-5}$.  
+        \item \textbf{Sequence Length}: Typically limited to 128 tokens.  
+        \item \textbf{Training Steps}: Models may be trained over 100,000 steps or more.  
+    \end{itemize}  
+\end{itemize}  
+  
+\subsubsection{Data Sampling}  
+To train effectively over large datasets:  
+  
+\begin{itemize}  
+    \item \textbf{Data Sources}: Multiple datasets are combined, such as Reddit comments, SQuAD, and NLI datasets.  
+    \item \textbf{Sampling Strategy}: Datasets are sampled with weighted probabilities to ensure diverse and balanced training data.  
+\end{itemize}  
+  
+\subsection{Knowledge Distillation}  
+MiniLM uses knowledge distillation to improve embeddings:  
+  
+\begin{itemize}  
+    \item \textbf{Teacher Model}: A larger pre-trained model like BERT-base.  
+    \item \textbf{Distillation Objectives}:  
+    \begin{itemize}  
+        \item Mimic the teacher's self-attention distributions.  
+        \item Capture value relations from the teacher's model.  
+    \end{itemize}  
+    \item \textbf{Distillation Loss Functions}:  
+    \begin{itemize}  
+        \item \textbf{Attention Transfer Loss}:  
+  
+        $$  
+        L_{\text{AT}} = \sum_{l \in \mathcal{L}} \sum_{h=1}^{H} \text{KL}\left( \mathbf{A}_{l,h}^T \| \mathbf{A}_{l,h}^S \right)  
+        $$  
+  
+        Where:  
+  
+        \begin{itemize}  
+            \item $\mathbf{A}_{l,h}^T$: Attention distributions from the teacher at layer $l$, head $h$.  
+            \item $\mathbf{A}_{l,h}^S$: Corresponding distributions from the student.  
+            \item $\mathcal{L}$: Set of layers used for distillation.  
+            \item $H$: Number of attention heads.  
+            \item $\text{KL}$: Kullback-Leibler divergence.  
+        \end{itemize}  
+  
+        \item \textbf{Value-Relation Transfer Loss}:  
+  
+        $$  
+        L_{\text{VR}} = \sum_{l \in \mathcal{L}} \text{MSE}\left( \mathbf{VRT}_{l}^T , \mathbf{VRT}_{l}^S \right)  
+        $$  
+  
+        Where:  
+  
+        \begin{itemize}  
+            \item $\mathbf{VRT}_{l}^T$, $\mathbf{VRT}_{l}^S$: Value relation tensors from the teacher and student at layer $l$.  
+            \item $\text{MSE}$: Mean Squared Error loss.  
+        \end{itemize}  
+  
+        \item \textbf{Total Distillation Loss}:  
+  
+        $$  
+        L_{\text{distill}} = L_{\text{AT}} + \beta L_{\text{VR}}  
+        $$  
+  
+        Where $\beta$ is a weighting factor balancing the two loss components.  
+    \end{itemize}  
+\end{itemize}  
+  
+\section{Conclusion}  
+Both ModernBERT and MiniLM employ sophisticated training methodologies to produce high-quality embeddings:  
+  
+\begin{itemize}  
+    \item **ModernBERT** focuses on architectural innovations and large-scale training to handle long sequences and diverse tasks effectively.  
+    \item **MiniLM** emphasizes efficiency through model compression and knowledge distillation, making it suitable for resource-constrained environments.  
+\end{itemize}  
+  
+Understanding these training processes allows practitioners to choose the appropriate model based on their specific requirements, such as context length handling, computational resources, and performance needs.  
+  
+\section{References}  
+\begin{itemize}  
+    \item ModernBERT Embed Base: \url{https://huggingface.co/nomic-ai/modernbert-embed-base}  
+    \item Nomic Embed Technical Report: \url{https://arxiv.org/abs/2402.01613}  
+    \item MiniLM All-MiniLM-L6-v2: \url{https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2}  
+    \item MiniLM MSMARCO-MiniLM-L-12-v3: \url{https://huggingface.co/sentence-transformers/msmarco-MiniLM-L-12-v3}  
+\end{itemize}  
+  
+\end{document}  

@@ -1,0 +1,118 @@
+
+\subsection{Quantization Framework}
+
+\paragraph{Multi-level Quantization}
+We implement multiple quantization levels to provide flexibility in the storage-performance trade-off:
+\begin{itemize}
+    \item 2-bit quantization (4 levels)
+    \item 1.5-bit quantization (3 levels)
+    \item 1-bit quantization (2 levels)
+    \item 0.5-bit quantization (combines pairs of dimensions)
+\end{itemize}
+These varying quantization modes allow the system to choose between different levels of precision and storage footprint depending on the target application requirements.
+
+\paragraph{Threshold-based Discretization}
+For quantization to discretize continuous embedding values into these finite levels, we define a set of thresholds that partition the embedding distribution across each dimension. Specifically, for $k$-bit quantization with $2^k$ discrete levels, we require $(2^k - 1)$ thresholds per dimension. Each threshold $\theta_{i}$ in a given dimension defines a boundary above which embedding values are assigned to the next higher quantization bin. For instance, in 2-bit quantization (4 levels), three thresholds $\{\theta_1, \theta_2, \theta_3\}$ separate the continuous range of values into four bins.
+
+\subsubsection{Why Thresholds Are Needed}
+Thresholds serve as boundary points to:
+\begin{enumerate}
+    \item \textbf{Discretize embedding values.} By mapping each contiguous range in a dimension to a discrete code, thresholds effectively convert real-valued embeddings to small integer levels.
+    \item \textbf{Balance data distribution among bins.} A well-chosen set of thresholds prevents the embedding values from collapsing into too few levels, which would degrade retrieval performance.
+    \item \textbf{Control quantization precision.} Varying the number of thresholds (hence the number of levels) directly impacts how finely each dimension is quantized.
+\end{enumerate}
+
+\subsubsection{Initialization and Training of Thresholds}
+We initialize thresholds using percentile-based statistics computed from a sample of the output embedding distribution, ensuring each quantization bin is populated with approximately equal fractions of the data. Formally, for each dimension $d$ in the $d$-dimensional embedding space $\mathbf{X} \in \mathbb{R}^{N \times d}$ (with $N$ data points), we:
+\begin{enumerate}
+    \item Collect the values $\{ x_{1,d}, x_{2,d}, \dots, x_{N,d} \}$.
+    \item Determine target quantiles $\{q_1,\dots,q_{(2^k-1)}\}$ evenly spaced in $(0,1)$ (omitting the extremes).
+    \item Set $\theta_{j,d} = \text{Quantile}\bigl(\{ x_{i,d} \},\; q_j\bigr)$ for each quantile $q_j$ in that dimension.
+\end{enumerate}
+This percentile-based approach leads to thresholds $\theta_{j,d}$ that capture the natural spread of values and promotes balanced quantization bins.
+
+\paragraph{Adaptive Updating of Thresholds}
+During training, the embedding distribution can shift because the transformation network optimizes both representation quality and quantization objectives. Consequently, we periodically update the thresholds in each dimension by re-estimating them on a batch (or subset) of the current embeddings. A momentum term $\mu \in [0,1]$ smooths these updates to avoid large, unstable jumps:
+\[
+\theta_{j,d}^{(\text{new})} \;\leftarrow\; \mu\,\theta_{j,d}^{(\text{old})} \;+\;(1-\mu)\;\widehat{\theta}_{j,d}^{(\text{batch})},
+\]
+where $\widehat{\theta}_{j,d}^{(\text{batch})}$ is the newly computed threshold candidate from the latest batch statistics. This mechanism allows the quantizer to adapt over training epochs and maintain evenly distributed bins.
+
+\paragraph{Integration with the Transformation Network}
+Before quantization, we apply a feedforward transformation to produce an optimized latent space that is better suited to discrete partitioning. As the transformation learns to condense and spread relevant features along each dimension, the threshold updates continue to reflect the newest embedding distribution, thus reducing quantization errors and preserving semantic similarity even under low-bit discretization.
+
+By coupling this threshold-based quantization scheme with our trainable transformation network, we maintain high retrieval accuracy while significantly reducing storage requirements across the various multi-level quantization modes.
+
+\paragraph{Trainable Neural Transformation}
+We introduce a feedforward neural network (FFN) transformation before quantization to optimize the embedding space for better quantization: $\mathbf{z} = \text{FFN}(\mathbf{x}; \theta)$ where $\mathbf{x}$ is the input embedding and $\theta$ represents the trainable parameters.
+
+
+\subsection{Quantization Framework}
+\label{subsec:quantization_framework}
+
+Our quantization framework addresses the fundamental challenge of converting high-precision embeddings into compact, discrete representations while preserving semantic relationships. We introduce a flexible, multi-level quantization approach that combines trainable neural transformations with adaptive threshold-based discretization.
+
+\paragraph{Trainable Neural Transformation}
+We introduce a feedforward neural network (FFN) transformation before quantization to optimize the embedding space for better quantization: $\mathbf{z} = \text{FFN}(\mathbf{x}; \theta)$ where $\mathbf{x}$ is the input embedding and $\theta$ represents the trainable parameters.
+
+\paragraph{Multi-level Quantization}
+We implement multiple quantization levels to provide flexibility in the storage-performance trade-off:
+\begin{itemize}
+    \item 2-bit quantization (4 levels)
+    \item 1.5-bit quantization (3 levels)
+    \item 1-bit quantization (2 levels)
+    \item 0.5-bit quantization (combines pairs of dimensions)
+\end{itemize}
+
+For a given $k$-bit quantization scheme with $2^k$ discrete levels, we partition the continuous embedding space using $(2^k - 1)$ learnable thresholds per dimension. For example, 2-bit quantization employs three thresholds $\{\theta_1, \theta_2, \theta_3\}$ to separate the embedding values into four distinct bins, while 1-bit quantization uses a single threshold $\theta$ to create a binary partition.
+
+\subsubsection{Threshold-based Discretization}
+The core of our quantization approach relies on carefully positioned thresholds that partition each dimension's embedding distribution. These thresholds serve multiple critical functions:
+
+\begin{enumerate}
+    \item They enable efficient discretization by mapping continuous ranges to discrete codes
+    \item They maintain balanced bin populations to prevent information collapse
+    \item They provide fine-grained control over quantization precision
+\end{enumerate}
+
+For a $d$-dimensional embedding space $\mathbf{X} \in \mathbb{R}^{N \times d}$ with $N$ samples, we initialize thresholds using percentile statistics to ensure balanced quantization. Specifically, for each dimension $j$, we:
+
+\begin{equation}
+    \theta_{i,j} = \text{Quantile}\bigl(\{x_{1,j}, \ldots, x_{N,j}\},\; q_i\bigr)
+\end{equation}
+
+where $q_i$ are target quantiles evenly spaced in $(0,1)$, excluding extremes. This initialization ensures each quantization bin contains approximately equal fractions of the data distribution.
+
+\subsubsection{Adaptive Threshold Learning}
+During training, the embedding distribution evolves as the transformation network optimizes for both representation quality and quantization objectives. To accommodate these distribution shifts, we implement an adaptive threshold update mechanism. After each training batch, thresholds are updated using an exponential moving average:
+
+\begin{equation}
+    \theta_{i,j}^{(\text{new})} = \mu\,\theta_{i,j}^{(\text{old})} + (1-\mu)\;\widehat{\theta}_{i,j}^{(\text{batch})}
+\end{equation}
+
+where $\mu \in [0,1]$ is a momentum coefficient that stabilizes updates, and $\widehat{\theta}_{i,j}^{(\text{batch})}$ represents newly computed threshold candidates from the current batch statistics. This adaptive mechanism ensures the quantization boundaries remain optimal as the embedding distribution evolves during training.
+
+\subsubsection{Quantization Process}
+Given an input embedding $\mathbf{x}$, the complete quantization process proceeds as follows:
+
+\begin{enumerate}
+    \item Apply the trainable transformation: $\mathbf{z} = \text{FFN}(\mathbf{x})$
+    \item Normalize the transformed embedding: $\hat{\mathbf{z}} = \text{normalize}(\mathbf{z})$
+    \item For each dimension $j$, assign discrete codes based on thresholds:
+    \begin{equation}
+        q_j = \sum_{i=1}^{2^k-1} \mathbbm{1}[\hat{z}_j > \theta_{i,j}]
+    \end{equation}
+\end{enumerate}
+
+This process yields discrete codes that can be efficiently stored and compared using Hamming distance computations, while the learned transformation and adaptive thresholds ensure minimal loss of semantic information.
+
+The combination of trainable transformation networks and adaptive threshold-based quantization provides several key advantages:
+
+\begin{itemize}
+    \item The transformation network learns to organize embedding dimensions optimally for quantization
+    \item Adaptive thresholds maintain balanced and effective quantization bins
+    \item Multiple quantization levels offer flexible storage-performance trade-offs
+    \item The entire system can be trained end-to-end with standard optimization techniques
+\end{itemize}
+
+Through extensive experimentation (detailed in Section~\ref{sec:experiments}), we demonstrate that this framework achieves significant compression while maintaining high retrieval accuracy across diverse tasks and datasets.

@@ -1,0 +1,235 @@
+\subsection{Matryoshka Representation Learning}
+
+Matryoshka Representation Learning (MRL) is inspired by Russian nesting dolls (Matryoshka), where smaller representations are nested within larger ones. In the context of embeddings, it enables the use of variable-length representations from a single model by ensuring that lower-dimensional projections preserve essential information.
+
+\subsubsection{Mathematical Formulation}
+
+Let $\mathbf{x} \in \mathbb{R}^d$ be an input embedding of dimension $d$. MRL creates a series of nested representations $\{\mathbf{y}_k\}_{k=1}^K$ where:
+
+\begin{equation}
+    \mathbf{y}_k = f_k(\mathbf{x}) \in \mathbb{R}^{d_k}
+\end{equation}
+
+where $d_1 < d_2 < ... < d_K = d$ are the different embedding dimensions, and $f_k$ are learned transformations.
+
+The key property is that smaller representations are subsets of larger ones:
+
+\begin{equation}
+    \mathbf{y}_i[1:d_j] = \mathbf{y}_j \quad \text{for } j < i
+\end{equation}
+
+\subsubsection{Multi-Scale Loss Function}
+
+The loss function typically combines multiple components:
+
+\begin{equation}
+    \mathcal{L}_{\text{total}} = \sum_{k=1}^K \alpha_k \mathcal{L}_{\text{task}}(\mathbf{y}_k) + \lambda \mathcal{L}_{\text{consistency}}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\mathcal{L}_{\text{task}}$ is the main task loss (e.g., contrastive loss for similarity learning)
+    \item $\alpha_k$ are importance weights for different scales
+    \item $\mathcal{L}_{\text{consistency}}$ ensures nested property:
+\end{itemize}
+
+\begin{equation}
+    \mathcal{L}_{\text{consistency}} = \sum_{i=2}^K \sum_{j=1}^{i-1} \|\mathbf{y}_i[1:d_j] - \mathbf{y}_j\|_2^2
+\end{equation}
+
+\subsubsection{Training Process}
+
+The model is trained using a multi-task approach:
+
+1. \textbf{Forward Pass}:
+   \begin{equation}
+       \text{For each scale } k: \mathbf{y}_k = f_k(\mathbf{x})
+   \end{equation}
+
+2. \textbf{Loss Computation}:
+   \begin{itemize}
+       \item Compute task loss at each scale
+       \item Compute consistency loss between scales
+       \item Combine losses with weights
+   \end{itemize}
+
+3. \textbf{Gradient Updates}:
+   \begin{equation}
+       \theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}_{\text{total}}
+   \end{equation}
+
+\subsubsection{Information Concentration}
+
+To ensure important information is concentrated in earlier dimensions, additional constraints can be added:
+
+\begin{equation}
+    \mathcal{L}_{\text{concentration}} = \sum_{k=1}^K \beta_k \|\mathbf{y}_k\|_1
+\end{equation}
+
+where $\beta_k$ increases with $k$ to encourage sparsity in higher dimensions.
+
+\subsubsection{Similarity Preservation}
+
+For retrieval tasks, cosine similarity should be preserved across scales:
+
+\begin{equation}
+    \mathcal{L}_{\text{similarity}} = \sum_{k=1}^K \gamma_k |cos(\mathbf{y}_k, \mathbf{y}_k') - cos(\mathbf{y}_K, \mathbf{y}_K')|
+\end{equation}
+
+where $\mathbf{y}_k$ and $\mathbf{y}_k'$ are embeddings of related items at scale $k$.
+
+\subsubsection{Implementation Details}
+
+The transformation functions $f_k$ are typically implemented as:
+
+\begin{equation}
+    f_k(\mathbf{x}) = \text{Proj}_k(\text{FFN}_k(\mathbf{x}))
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\text{FFN}_k$ is a feedforward neural network
+    \item $\text{Proj}_k$ projects to dimension $d_k$
+    \item Layer normalization is applied after projections
+\end{itemize}
+
+\subsection{Detailed Analysis of Matryoshka Representation Learning}
+
+\subsubsection{Core Concept and Intuition}
+
+Matryoshka Representation Learning (MRL) addresses a fundamental challenge: how to create embeddings that remain effective when truncated to smaller dimensions. Traditional embeddings often lose critical information when dimensions are removed, as important features may be distributed across all dimensions.
+
+The key insight of MRL is to explicitly train the model to:
+\begin{enumerate}
+    \item Concentrate the most important information in the earliest dimensions
+    \item Maintain consistent relationships between embeddings at all scales
+    \item Allow for graceful degradation as dimensions are removed
+\end{enumerate}
+
+\subsubsection{Mathematical Framework}
+
+Let's break down the components in detail:
+
+\paragraph{1. Embedding Generation}
+Given an input $\mathbf{x}$ (e.g., text or image), we generate a series of nested embeddings:
+
+\begin{equation}
+    \mathbf{y}_k = f_k(\mathbf{x}) \in \mathbb{R}^{d_k}, \quad k = 1,\ldots,K
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $d_k$ are increasing dimensions: $d_1 < d_2 < ... < d_K$
+    \item Common choices: $d_k = 2^k \cdot d_1$ or arithmetic progression
+    \item $f_k$ are learned transformations with shared parameters
+\end{itemize}
+
+\paragraph{2. Transformation Architecture}
+Each $f_k$ is composed of:
+
+\begin{equation}
+    f_k = \text{Proj}_k \circ \text{FFN}_k \circ \text{Embed}
+\end{equation}
+
+where:
+\begin{equation}
+    \text{FFN}_k(\mathbf{h}) = \text{LayerNorm}(W_2\sigma(W_1\mathbf{h} + \mathbf{b}_1) + \mathbf{b}_2)
+\end{equation}
+
+The projection layer $\text{Proj}_k$ ensures the nested property:
+\begin{equation}
+    \text{Proj}_k(\mathbf{h})[1:d_j] = \text{Proj}_j(\mathbf{h}) \quad \forall j < k
+\end{equation}
+
+\paragraph{3. Multi-Scale Loss Function}
+The total loss combines multiple objectives:
+
+\begin{equation}
+    \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{task}} + \lambda_1\mathcal{L}_{\text{nest}} + \lambda_2\mathcal{L}_{\text{info}} + \lambda_3\mathcal{L}_{\text{sim}}
+\end{equation}
+
+\subparagraph{a. Task Loss}
+For each scale:
+\begin{equation}
+    \mathcal{L}_{\text{task}} = \sum_{k=1}^K \alpha_k \mathcal{L}_k(\mathbf{y}_k)
+\end{equation}
+
+where $\alpha_k$ are typically decreasing weights to emphasize smaller scales.
+
+\subparagraph{b. Nesting Loss}
+Ensures consistency across scales:
+\begin{equation}
+    \mathcal{L}_{\text{nest}} = \sum_{i=2}^K \sum_{j=1}^{i-1} \|\mathbf{y}_i[1:d_j] - \mathbf{y}_j\|_2^2
+\end{equation}
+
+\subparagraph{c. Information Concentration Loss}
+Encourages important information in early dimensions:
+\begin{equation}
+    \mathcal{L}_{\text{info}} = \sum_{k=1}^K \beta_k \|\mathbf{y}_k[d_{k-1}:d_k]\|_1
+\end{equation}
+
+where $\beta_k$ increases with $k$ to promote sparsity in higher dimensions.
+
+\subparagraph{d. Similarity Preservation Loss}
+Maintains consistent relationships:
+\begin{equation}
+    \mathcal{L}_{\text{sim}} = \sum_{k=1}^K \gamma_k \sum_{(a,p,n)} [\delta + s(\mathbf{y}_k^a, \mathbf{y}_k^n) - s(\mathbf{y}_k^a, \mathbf{y}_k^p)]_+
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $s(\cdot,\cdot)$ is cosine similarity
+    \item $(a,p,n)$ are anchor, positive, and negative examples
+    \item $\delta$ is the margin parameter
+    \item $[x]_+ = \max(0,x)$
+\end{itemize}
+
+\subsubsection{Training Strategy}
+
+The training process involves several key components:
+
+\paragraph{1. Progressive Training}
+\begin{itemize}
+    \item Start with smallest scale $d_1$
+    \item Gradually introduce larger scales
+    \item Use curriculum learning to adjust loss weights
+\end{itemize}
+
+\paragraph{2. Attention Mechanism}
+To help concentrate information:
+\begin{equation}
+    \text{Attention}_k(\mathbf{h}) = \text{softmax}(\frac{Q_k\mathbf{h}K_k^T}{\sqrt{d_k}})V_k
+\end{equation}
+
+\paragraph{3. Regularization}
+To prevent degenerate solutions:
+\begin{equation}
+    \mathcal{L}_{\text{reg}} = \sum_{k=1}^K \|\mathbf{y}_k^T\mathbf{y}_k - \mathbf{I}\|_F^2
+\end{equation}
+
+\subsubsection{Practical Implementation}
+
+Key implementation details include:
+
+\begin{enumerate}
+    \item \textbf{Dimension Selection:}
+    \begin{itemize}
+        \item $d_1$: typically 32 or 64
+        \item Geometric progression: $d_k = 2^k \cdot d_1$
+        \item Maximum $K$ based on computational constraints
+    \end{itemize}
+
+    \item \textbf{Loss Weights:}
+    \begin{itemize}
+        \item $\alpha_k = 2^{-k}$ for task loss
+        \item $\beta_k = 2^k$ for information concentration
+        \item $\gamma_k = 1$ for similarity preservation
+    \end{itemize}
+
+    \item \textbf{Training Schedule:}
+    \begin{itemize}
+        \item Warm-up period for each scale
+        \item Adaptive learning rates per scale
+        \item Early stopping based on smallest scale performance
+    \end{itemize}
+\end{enumerate}

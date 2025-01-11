@@ -1,0 +1,113 @@
+\section{Methodology}  
+\label{sec:methodology}  
+
+
+  
+\subsection{Overview of Tiny Embeddings}  
+Provide a high-level overview of your approach, emphasizing the integration of Matryoshka Representation Learning, advanced quantization techniques, and efficient bitwise operations.  
+  
+\subsection{Matryoshka Representation Learning}  
+\label{sec:matryoshka}  
+  
+\subsubsection{Model Architecture}  
+Describe the base embedding model augmented with additional feedforward neural network (FFN) layers to enforce the Matryoshka property.  
+  
+% Include a figure illustrating the model architecture.  
+\begin{figure}[ht]  
+    \centering  
+    %\includegraphics[width=0.8\linewidth]{figures/model_architecture.png}  
+    \caption{Model architecture of Tiny Embeddings integrating Matryoshka Representation Learning with quantization layers. [Placeholder for figure]}  
+    \label{fig:model_architecture}  
+\end{figure}  
+  
+\subsubsection{Enforcing the Matryoshka Property}  
+Explain how specialized loss functions are used to concentrate essential information in the early dimensions.  
+  
+\paragraph{Loss Functions}  
+Define the loss functions used:  
+\begin{equation}  
+\mathcal{L}_{\text{total}} = \lambda_{\text{sim}}\mathcal{L}_{\text{sim}} + \lambda_{\text{quant}}\mathcal{L}_{\text{quant}} + \lambda_{\text{orth}}\mathcal{L}_{\text{orth}} + \lambda_{\text{info}}\mathcal{L}_{\text{info}}  
+\end{equation}  
+Where:  
+\begin{itemize}  
+    \item $\mathcal{L}_{\text{sim}}$: Similarity preservation loss.  
+    \item $\mathcal{L}_{\text{quant}}$: Quantization regularization loss.  
+    \item $\mathcal{L}_{\text{orth}}$: Orthogonality regularization.  
+    \item $\mathcal{L}_{\text{info}}$: Information bottleneck regularization.  
+\end{itemize}  
+  
+\subsection{Advanced Quantization Techniques}  
+\label{sec:quantization}  
+  
+\subsubsection{Quantization Levels}  
+Describe the different quantization methods applied:  
+  
+\paragraph{2-bit Quantization}  
+Explain 2-bit quantization, mapping values to one of four levels.  
+  
+\paragraph{1.5-bit Quantization}  
+Introduce the novel 1.5-bit quantization method, which uses three quantization levels.  
+  
+\paragraph{1-bit Quantization}  
+Describe standard 1-bit quantization with two levels.  
+  
+\paragraph{0.5-bit Quantization}  
+Explain how dimensions are reduced before applying 1-bit quantization.  
+  
+\subsubsection{Quantization Functions}  
+Provide the mathematical formulations for the quantization functions using sigmoid-based probability assignments:  
+\begin{equation}  
+Q(\mathbf{s}) = \sum_{i=1}^{L} p_i c_i  
+\end{equation}  
+Where:  
+\begin{itemize}  
+    \item $\mathbf{s}$: Normalized input segment.  
+    \item $L$: Number of quantization levels.  
+    \item $p_i$: Probability of assigning to the $i$-th quantization level.  
+    \item $c_i$: Quantization codebook values.  
+\end{itemize}  
+  
+\subsubsection{Threshold Initialization and Temperature Annealing}  
+Discuss how thresholds are initialized using sample embeddings and explain the temperature annealing schedule:  
+\begin{equation}  
+k = k_0 \cdot \exp(-\alpha t)  
+\end{equation}  
+Where:  
+\begin{itemize}  
+    \item $k_0$: Initial temperature.  
+    \item $\alpha$: Annealing rate.  
+    \item $t$: Training iteration or epoch.  
+\end{itemize}  
+  
+\subsection{Hybrid Quantization Architecture}  
+\label{sec:hybrid_quantization}  
+Explain how higher precision quantization is applied to dimensions with more information content. Describe how the embedding dimensions are segmented and assigned different quantization levels.  
+  
+% Include a diagram of the hybrid quantization architecture.  
+\begin{figure}[ht]  
+    \centering  
+    %\includegraphics[width=0.8\linewidth]{figures/hybrid_architecture.png}  
+    \caption{Hybrid quantization architecture applying different quantization levels to segments of the embedding dimensions. [Placeholder for figure]}  
+    \label{fig:hybrid_architecture}  
+\end{figure}  
+  
+\subsection{Efficient Similarity Computation with Bitwise Operations}  
+\label{sec:similarity_computation}  
+  
+\subsubsection{Mapping Multi-bit Quantization to Binary Representations}  
+Explain how embeddings quantized to multi-bit levels are mapped to higher-bit binary representations for efficient computation.  
+  
+\paragraph{Example Codebook Mapping}  
+For 2-bit to 3-bit expansion:  
+\begin{equation}  
+\text{Codebook} = \begin{cases}  
+0 \rightarrow [0, 0, 0] \\  
+1 \rightarrow [0, 0, 1] \\  
+2 \rightarrow [0, 1, 1] \\  
+3 \rightarrow [1, 1, 1]  
+\end{cases}  
+\end{equation}  
+  
+\subsubsection{Bitwise Operations for Similarity}  
+Describe how Hamming distance and similarity are computed using bitwise operations like XOR, NOT, and POPCOUNT.  
+  

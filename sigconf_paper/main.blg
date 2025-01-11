@@ -1,0 +1,101 @@
+This is BibTeX, Version 0.99d (TeX Live 2022)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: main.aux
+A level-1 auxiliary file: related.aux
+A level-1 auxiliary file: methodology.aux
+A level-1 auxiliary file: experiments.aux
+A level-1 auxiliary file: results.aux
+The style file: ACM-Reference-Format.bst
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
+Database file #1: sample-base.bib
+Warning--I didn't find a database entry for "mikolov2013distributed"
+Warning--I didn't find a database entry for "pennington2014glove"
+Warning--I didn't find a database entry for "devlin2019bert"
+Warning--I didn't find a database entry for "liu2019roberta"
+Warning--I didn't find a database entry for "han2015deep"
+Warning--I didn't find a database entry for "frankle2019lottery"
+Warning--I didn't find a database entry for "hinton2015distilling"
+Warning--I didn't find a database entry for "sanh2019distilbert"
+Warning--I didn't find a database entry for "jiao2020tinybert"
+Warning--I didn't find a database entry for "houlsby2019parameter"
+Warning--I didn't find a database entry for "li2021prefix"
+Warning--I didn't find a database entry for "jaderberg2014speeding"
+Warning--I didn't find a database entry for "sainath2013low"
+Warning--I didn't find a database entry for "jacob2018quantization"
+Warning--I didn't find a database entry for "hubara2017quantized"
+Warning--I didn't find a database entry for "mishra2018apprentice"
+Warning--I didn't find a database entry for "shen2018nash"
+Warning--I didn't find a database entry for "shu2018compressing"
+Warning--I didn't find a database entry for "jegou2010product"
+Warning--I didn't find a database entry for "jolliffe2016principal"
+Warning--I didn't find a database entry for "golub1971singular"
+Warning--I didn't find a database entry for "hinton2006reducing"
+Warning--I didn't find a database entry for "li2016pruning"
+Warning--I didn't find a database entry for "wang2017survey"
+Warning--I didn't find a database entry for "andoni2006near"
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated glb_str_ptr (elt_size=4) to 20 items from 10.
+Reallocated global_strs (elt_size=200001) to 20 items from 10.
+Reallocated glb_str_end (elt_size=4) to 20 items from 10.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Warning--empty booktitle in boteva2016full
+Warning--no number and no volume in boteva2016full
+Warning--page numbers missing in both pages and numpages fields in boteva2016full
+Warning--empty publisher in specter2020cohan
+Warning--empty address in specter2020cohan
+Warning--page numbers missing in both pages and numpages fields in specter2020cohan
+Warning--page numbers missing in both pages and numpages fields in iyer2017first
+Warning--empty address in kusupati2021matryoshka
+Warning--no number and no volume in muennighoff2022mteb
+Warning--page numbers missing in both pages and numpages fields in muennighoff2022mteb
+Warning--page numbers missing in both pages and numpages fields in nguyen2016ms
+Warning--empty address in reimers-2019-sentence-bert
+Warning--page numbers missing in both pages and numpages fields in reimers-2019-sentence-bert
+Warning--page numbers missing in both pages and numpages fields in voorhees2021trec
+Warning--empty publisher in thakur2021beir
+Warning--empty address in thakur2021beir
+Warning--page numbers missing in both pages and numpages fields in thakur2021beir
+You've used 21 entries,
+            5981 wiz_defined-function locations,
+            1672 strings with 26112 characters,
+and the built_in function-call counts, 27110 in all, are:
+= -- 3026
+> -- 1320
+< -- 0
++ -- 459
+- -- 440
+* -- 2335
+:= -- 2836
+add.period$ -- 103
+call.type$ -- 21
+change.case$ -- 227
+chr.to.int$ -- 21
+cite$ -- 38
+duplicate$ -- 2212
+empty$ -- 1545
+format.name$ -- 524
+if$ -- 6295
+int.to.chr$ -- 2
+int.to.str$ -- 1
+missing$ -- 84
+newline$ -- 259
+num.names$ -- 155
+pop$ -- 965
+preamble$ -- 1
+purify$ -- 391
+quote$ -- 0
+skip$ -- 822
+stack$ -- 0
+substring$ -- 1624
+swap$ -- 213
+text.length$ -- 0
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 575
+warning$ -- 17
+while$ -- 91
+width$ -- 0
+write$ -- 508
+(There were 42 warnings)

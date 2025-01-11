@@ -1,0 +1,315 @@
+\documentclass{article}
+\usepackage[margin=1in]{geometry}
+\begin{document}
+
+\section*{Detailed Insights from Results and Analyses}
+
+\subsection*{1. Quantization Versus Full Precision}
+\begin{itemize}
+    \item \textbf{2-bit Quantization Nears FP32 Performance:} The 2-bit representations consistently perform very close to full-precision (FP32) embeddings, indicating that two bits per dimension can preserve a substantial amount of semantic information while drastically reducing storage costs.
+    \item \textbf{Performance Ordering Among Quantization Levels:} Although 2-bit is most accurate, the Hybrid Quantization approach is only marginally behind while offering additional storage gains. Meanwhile, 1.5-bit tends to outperform 1-bit or 1-bit expansions, suggesting that even fractional bit expansions (1.5-bit) yield tangible accuracy benefits.
+    \item \textbf{Trade-Off Curve:} Overall, there is a spectrum of trade-offs between compression ratio and retrieval fidelity. Where storage constraints are strict, 1-bit quantization or hybrid schemes may be preferable; where accuracy is paramount, 2-bit is more attractive.
+\end{itemize}
+
+\subsection*{2. Dimension Reduction Effects}
+\begin{itemize}
+    \item \textbf{Higher Dimensions Yield Better Baselines:} Across both Modern BERT (MB) and MiniLM, larger embedding sizes (e.g., 768 for MB, 384 for MiniLM) achieve higher accuracy. This appears consistent with the capacity of higher-dimensional vectors to encode richer semantic signals.
+    \item \textbf{Graceful Degradation to a Point:} The performance remains relatively stable down to moderate dimensions (e.g., 384 in MB, 192 in MiniLM). However, below these dimension levels, performance drops accelerate, indicating clear thresholds beyond which aggressive dimensional compression significantly compromises retrieval.
+    \item \textbf{Complementary to Quantization Levels:} The contribution of additional bits diminishes somewhat at high dimensions (because even a lower bit rate may suffice to encode critical information). Conversely, at lower dimensions, using a higher bit rate alleviates some of the information bottleneck caused by dimensional reduction.
+\end{itemize}
+
+\subsection*{3. Hybrid Quantization Benefits}
+\begin{itemize}
+    \item \textbf{Adaptive Precision Improves Efficiency:} By allocating higher precision (more bits) to more information-rich dimensions, Hybrid Quantization nearly matches 2-bit performance while requiring fewer total bits across the full embedding.
+    \item \textbf{Performance Retention at Extreme Compression:} Hybrid schemes preserve enough semantic detail in those critical early dimensions to mitigate the lower-precision encoding in the later (less important) dimensions, which helps avoid abrupt performance cliffs.
+\end{itemize}
+
+\subsection*{4. Training Components and Ablation Findings}
+\begin{itemize}
+    \item \textbf{Matryoshka Loss (ML) as a Key Factor:} The introduction of the ML directly helps preserve the most salient information in earlier dimensions, proving especially beneficial when embeddings are truncated or highly compressed.
+    \item \textbf{Orthogonality and Information Bottleneck Synergy:} Orthogonality Regularization ensures that newly added dimensions encode novel features, while Information Bottleneck Regularization encourages earlier dimensions to store crucial information. Their combination yields notable gains, particularly in smaller dimensions.
+    \item \textbf{Adaptive Variance Control as a Game-Changer:} The ablation results reveal that this mechanism significantly boosts performance, especially at lower dimensions or higher quantization levels, by preventing degeneracies and ensuring robust embedding variance over the training process.
+    \item \textbf{Quantization Loss for Better Threshold Fit:} The quantization-specific regularization helps embeddings settle into discrete levels with minimal overlap near boundaries. This effect is more pronounced as bits per dimension decrease, curbing performance losses otherwise caused by threshold misalignment.
+\end{itemize}
+
+\subsection*{5. Storage and Retrieval Speed Observations}
+\begin{itemize}
+    \item \textbf{Significant Memory Savings:} Empirical data show upwards of 90\% memory cost reduction (compared to FP32) for 2-bit and Hybrid embeddings, demonstrating the viability of deployment in memory-limited systems.
+    \item \textbf{Efficient Bitwise Operations:} Retrieving nearest neighbors through Hamming similarity (using bitwise XOR and POPCOUNT) yields marked speedups over floating-point cosine similarity. The acceleration becomes especially evident in large-scale scenarios.
+\end{itemize}
+
+\subsection*{6. Model-Specific Observations}
+\begin{itemize}
+    \item \textbf{Modern BERT (MB) Versus MiniLM:} 
+    \begin{itemize}
+        \item With higher dimensions (e.g., 768 or 384), MB retains better performance than MiniLM under the same quantization level. 
+        \item MiniLM, though starting from a lower dimension, still benefits substantially from quantization and matryoshka methods, suggesting that the approach generalizes well across architecturally different transformer encoders.
+    \end{itemize}
+    \item \textbf{Sensitivity to Compression:} MB appears slightly more resilient to dimensional downscaling (possibly due to its inherent capacity), while MiniLM sometimes exhibits faster trade-off declines, reflecting differences in each model’s internal parameterization.
+\end{itemize}
+
+\subsection*{7. Additional Insights and Recommendations}
+\begin{itemize}
+    \item \textbf{Safe Ranges for Deployment:} 
+    \begin{itemize}
+        \item For MB, dimensions above 256 with at least 1.5-bit quantization provide a balanced sweet spot of compression versus accuracy.
+        \item For MiniLM, 192 dimensions or higher with 2-bit quantization or Hybrid Quantization deliver stable performance while keeping storage overhead low.
+    \end{itemize}
+    \item \textbf{Value of Hierarchical Embeddings:} The Matryoshka property allows flexible truncation without retraining. This is useful for multi-tier systems where different user segments or hardware tiers might consume different embedding sizes.
+    \item \textbf{Importance of Full End-to-End Training:} Simple “linear dimension pruning” or naive thresholding does not match results from the fully trained approach that includes the specialized losses (Matryoshka, Orthogonality, etc.). Properly integrating these losses from the outset is essential.
+    \item \textbf{Careful Balancing of Loss Components:} Overweighting or underweighting any regularization component (e.g., Orthogonality or Variance Control) can lead to suboptimal outcomes, either in collapsed embeddings or insufficient compression benefits. A balanced tuning approach is recommended.
+\end{itemize}
+
+\end{document}
+
+\documentclass{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\begin{document}
+
+\section*{Detailed Insights with Quantitative Comparisons}
+
+Below we compile key insights and observations derived from the experimental results, focusing on actual performance values, percentages, and comparisons across different dimensions and quantization levels for both Modern BERT (\textbf{MB}) and MiniLM models.
+
+\subsection*{1. Effect of Quantization on Performance}
+
+\noindent\textbf{Overall Quantization Ordering:} 
+\begin{itemize}
+  \item \textbf{2-bit} quantization consistently performs the closest to full-precision (FP32) among all quantized variants.
+  \item \textbf{Hybrid Quant} slightly lags behind 2-bit but often exceeds 1.5-bit and 1-bit quantization, while offering higher storage savings than pure 2-bit.
+  \item \textbf{1.5-bit} provides a middle ground between 1-bit and 2-bit.
+  \item \textbf{1-bit} usually exhibits the greatest drop in performance but also yields very high compression ratios.
+\end{itemize}
+
+\noindent\textbf{Numerical Examples (Modern BERT, 384 dimensions)}:
+\begin{itemize}
+  \item \textbf{2-bit:} nDCG@10 = 0.4593, \emph{vs.} 0.4695 in FP32 
+    \begin{itemize}
+      \item This is $\frac{0.4593}{0.4695} \times 100 \approx 97.8\%$ of the original full-precision performance.
+    \end{itemize}
+  \item \textbf{1-bit:} nDCG@10 = 0.4167, which is roughly $88.8\%$ of FP32 performance at 384 dimensions.
+\end{itemize}
+
+
+\subsection*{2. Dimension Reduction and Performance Retention}
+
+\noindent\textbf{Modern BERT (MB) Examples:}
+
+\begin{description}
+  \item[768 $\rightarrow$ 384 dimensions (2-bit):] 
+    \begin{itemize}
+      \item 768-dim, 2-bit performance = 0.4687
+      \item 384-dim, 2-bit performance = 0.4593
+      \item Relative = $(0.4593 / 0.4687) \times 100 \approx 98.0\%$
+    \end{itemize}
+  \item[384 $\rightarrow$ 256 dimensions (2-bit):]
+    \begin{itemize}
+      \item 256-dim, 2-bit = 0.4513, \quad FP32 = 0.4680
+      \item Relative = $(0.4513 / 0.4680) \times 100 \approx 96.4\%$ \emph{(vs. FP32 at 256 dims)}
+    \end{itemize}
+  \item[256 $\rightarrow$ 192 dimensions (2-bit):]
+    \begin{itemize}
+      \item 192-dim, 2-bit = 0.4327, \quad FP32 = 0.4512
+      \item Relative = $(0.4327 / 0.4512) \times 100 \approx 95.9\%$
+    \end{itemize}
+  \item[192 $\rightarrow$ 96 dimensions (2-bit):]
+    \begin{itemize}
+      \item 96-dim, 2-bit = 0.3919, \quad FP32 = 0.4247
+      \item Relative = $(0.3919 / 0.4247) \times 100 \approx 92.3\%$
+    \end{itemize}
+\end{description}
+
+\noindent\textbf{MiniLM Examples:}
+
+\begin{description}
+  \item[384-dim, 2-bit:] nDCG@10 = 0.4185 \emph{vs.} FP32 = 0.4286
+    \begin{itemize}
+      \item $(0.4185 / 0.4286) \times 100 \approx 97.6\%$
+    \end{itemize}
+  \item[192-dim, 2-bit:] nDCG@10 = 0.4109 \emph{vs.} FP32 = 0.4219
+    \begin{itemize}
+      \item $(0.4109 / 0.4219) \times 100 \approx 97.4\%$
+    \end{itemize}
+  \item[96-dim, 2-bit:] nDCG@10 = 0.3712 \emph{vs.} FP32 = 0.3792
+    \begin{itemize}
+      \item $(0.3712 / 0.3792) \times 100 \approx 97.9\%$
+    \end{itemize}
+\end{description}
+
+\noindent \textbf{Key Takeaway:} Up to moderate dimension reduction, we see a graceful slope in accuracy drop (around $2\%$--$5\%$). Below certain dimensional thresholds (e.g., 192 for MB, 96 for MiniLM), performance begins to degrade more sharply.
+
+\subsection*{3. Storage and Quantitative Trade-Offs}
+
+\begin{itemize}
+  \item \textbf{2-bit} format yields roughly $90.6\%$ storage savings relative to FP32 (768-dimensional case), with about $96$--$98\%$ of the original accuracy across evaluated dimensions.
+  \item \textbf{Hybrid Quant} at 768 dimensions achieves around $94.9\%$ storage reduction, retaining $95\%$ or more of baseline accuracy. This is especially appealing when balancing precision versus memory constraints.
+  \item \textbf{1-bit} can save up to $96.9\%$ or more of the storage, but the performance difference spans $2\%$--$20\%$ (depending on dimension) relative to FP32.
+\end{itemize}
+
+\subsection*{4. Insights from Training Component Ablations}
+The role of each added training component can be expressed in approximate performance gains from baseline (\emph{Thresholds Only}):
+
+\begin{description}
+  \item[+ Quantization Loss:] Gains of around $1$--$2\%$ in nDCG@10 at most sized dimensions, preventing embeddings from falling near threshold boundaries.
+  \item[+ Matryoshka Loss:] Yields a more pronounced improvement (e.g., $3$--$4\%$ jump in some ablations), especially at lower dimensions, by nesting crucial information into earlier dimensions.
+  \item[+ Orthogonality Regularization:] Contributes moderate performance increases ($1\%$--$2\%$), ensuring that new dimensions capture novel information rather than overlapping with those from previous slices.
+  \item[+ Information Bottleneck:] Adds another $1$--$2\%$ in synergy with Matryoshka Loss for consistently improved representation of smaller dimension slices.
+  \item[+ Adaptive Variance Control:] Frequently accounts for the largest single-step jump (2--4 percentage points in the ablation tables), preventing dimension collapse and enabling robust variance across embedding dimensions.
+\end{description}
+
+\subsection*{5. Practical Deployment Pointers}
+
+\begin{itemize}
+  \item \textbf{Dimensional Sweet Spots -- MB at 384 dims vs. MiniLM at 192 dims:}
+    \begin{itemize}
+      \item MB retains $\geq 97\%$ of FP32 performance with 2-bit quantization at 384 dims.
+      \item MiniLM achieves $\approx 97\%$ of FP32 performance when employing 2-bit at 192 dims.
+    \end{itemize}
+  \item \textbf{Hybrid Quant Recommendation:} For large embedding sizes, Hybrid can trim memory usage by $1$--$5\%$ more than pure 2-bit, with only a minor additional drop in performance. This is beneficial when scaling to tens or hundreds of millions of embeddings.
+  \item \textbf{Bitwise Speedups:} Hamming distance calculation via XOR and POPCOUNT typically outperforms floating-point operations by 2--4$\times$ (or more) in CPU-bound scenarios. This gap often widens with larger retrieval sets.
+\end{itemize}
+
+\subsection*{6. High-Level Observations}
+
+\noindent\textbf{Resilience of Modern BERT:}
+\begin{itemize}
+  \item MB is generally more resilient to dimension drops than MiniLM, possibly due to its original model size and more robust internal representations.
+  \item However, MiniLM still benefits greatly from the same matryoshka + quantization strategies.
+\end{itemize}
+
+\noindent\textbf{Importance of End-to-End Matryoshka + Quantization Training:}
+\begin{itemize}
+  \item Simple truncation or threshold selection (without specialized losses) leads to notably worse results.
+  \item The synergy of Matryoshka Loss, Orthogonality Regularization, and Adaptive Variance Control is key to preserving semantic information when aggressively compressing embeddings.
+\end{itemize}
+
+\end{document}
+
+
+\documentclass{article}
+\usepackage[margin=1.0in]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\begin{document}
+
+\section*{Comprehensive Insights and Quantitative Observations}
+
+This section provides a consolidated and detailed view of our experimental findings. 
+We focus on the interplay between embedding dimension, quantization levels, and the ablation of training components to highlight practical and theoretical implications.
+
+\subsection*{1. Comparing Quantization Strategies}
+
+\noindent\textbf{Relative Performance vs. FP32:}\\
+Tables \ref{tab:mb_main_results} and \ref{tab:minilm_main_results} reveal that \emph{2-bit quantization} retains around $95\%$--$98\%$ of the original FP32 performance across tested dimensions. Hybrid Quant typically matches or slightly outperforms 1.5-bit but remains close to 2-bit. 
+Meanwhile, 1-bit can fall more sharply, retaining anywhere from $80\%$--$90\%$ of FP32 performance, depending on dimension.
+
+\begin{itemize}
+  \item \textbf{Max Observed Retention:} $98.0\%-98.5\%$ under 2-bit (e.g., 384-dim MB, 192-dim MiniLM).
+  \item \textbf{Lowest Observed Retention for 1-bit:} $\approx 80\%$ of FP32 at the smallest dimensions tested (e.g., $96$-dim MB).
+\end{itemize}
+
+\subsection*{2. Impact of Dimensionality Reduction}
+
+\noindent\textbf{Modern BERT (MB):}\\
+\begin{itemize}
+    \item \textbf{384 $\to$ 256 dims (2-bit):} nDCG@10 drops from $0.4593 \to 0.4513$ which is $\sim98.3\%$ of the former's performance and $\sim96.4\%$ of the FP32 baseline at $256$ dims.
+    \item \textbf{256 $\to$ 192 dims (2-bit):} nDCG@10 goes $0.4513 \to 0.4327$; a $\sim4.1\%$ reduction from the former level.
+    \item \textbf{192 $\to$ 96 dims (2-bit):} nDCG@10 further drops to $0.3919$. This is $90.5\%$ of the $192$-dim value and $\sim92.3\%$ of the FP32 performance at $96$ dims (which is $0.4247$).
+\end{itemize}
+
+\noindent\textbf{MiniLM:}\\
+\begin{itemize}
+    \item \textbf{384 $\to$ 192 dims (1.5-bit):} 
+    \begin{itemize}
+        \item At 384 dims, performance is $0.4160$ vs. $0.4101$ at 1.5-bit. 
+        \item At 192 dims, $0.4017$ vs. $0.3923$ (1.5-bit). 
+        \item The relative difference stays $\approx2\%$--$4\%$ within each quantization category, showing MiniLM's stable transitions in mid-range dimensions.
+    \end{itemize}
+    \item \textbf{192 $\to$ 96 dims (2-bit):} nDCG@10 moves from $0.4109 \to 0.3712$, about a $9.7\%$ drop, which aligns with the stronger emphasis on dimension at low levels.
+\end{itemize}
+
+\noindent\textbf{Trend:} Both MB and MiniLM exhibit a \emph{graceful degradation} at mid dimensions, with larger performance drops emerging below $\sim192$ dims for MB and below $\sim96$ dims for MiniLM in most quantization settings.
+
+\subsection*{3. Hybrid Quantization Effectiveness}
+
+\begin{itemize}
+    \item \textbf{Close to 2-bit Performance:} Across multiple dimensions, Hybrid Quant embeddings recoup up to $95\%$--$97\%$ of the FP32 performance, occasionally lagging behind pure 2-bit by only $1\%$--$2\%$.
+    \item \textbf{Storage Benefits:} Hybrid reduces storage by $\approx94.9\%$ (comparable to 1.5-bit or 2-bit expansions). Notably, it provides faster retrieval than a naive multi-level scheme because only partial dimensions are allocated the maximum bit precision.
+    \item \textbf{Best Examples:} 
+    \begin{itemize}
+       \item MB at 384 dims: Hybrid nDCG@10 = $0.4509$ (\( \sim 96\%\) of FP32) vs. 2-bit = $0.4593$.
+       \item MiniLM at 192 dims: Hybrid nDCG@10 = $0.4017$ (\( \sim 95.2\%\) of FP32) vs. 2-bit = $0.4109$.
+    \end{itemize}
+\end{itemize}
+
+\subsection*{4. Storage and Retrieval Speed Comparisons}
+
+\noindent\textbf{Storage Reductions from Table~\ref{tab:storage_comparison}:}
+\begin{itemize}
+  \item \textbf{2-bit:} $90.6\%$ savings for a 768-dim vector ($288$ MB per $1$M embeddings vs. $3.07$ GB).
+  \item \textbf{1.5-bit:} Slightly more extreme savings at $93.8\%$, but accompanied by a somewhat larger performance drop relative to 2-bit or Hybrid.
+  \item \textbf{1-bit:} Achieves $96.9\%$ storage savings; performance ranges from $80\%$--$90\%$ of FP32 depending on dimension.
+  \item \textbf{Hybrid:} $94.9\%$ savings with $\approx95\%$--$98\%$ of FP32 accuracy reported in best-case scenarios.
+\end{itemize}
+
+\noindent\textbf{Retrieval-Speed Considerations:}
+\begin{itemize}
+    \item Hamming distance computations (bitwise \texttt{XOR} + \texttt{POPCNT}) operate at $3\times$--$4\times$ speedups over floating-point cosine similarity on large corpora, yielding major benefits in large-scale retrieval pipelines.
+    \item Hybrid Quant or 2-bit expansions (3-bit / 2-bit expansions) introduce slightly larger binary codes but remain more efficient than uncompressed floating-point embeddings.
+\end{itemize}
+
+\subsection*{5. Ablation Studies: Role of Training Components}
+
+\noindent\textbf{Approximate Performance Gains Over \emph{Thresholds Only} Baseline:}
+\begin{itemize}
+  \item \textbf{Matryoshka Loss (ML):} +2\% to +4\% in nDCG@10, especially pronounced at lower-dimensional setups (e.g., MB at 192 dims).
+  \item \textbf{Orthogonality Regularization (OR):} +1\% to +2\% improvement, helping reduce redundancy among newly added dimensions in the Matryoshka stacking.
+  \item \textbf{Information Bottleneck (IB):} +1\% to +2\% synergy with ML and OR, forcing earlier dimensions to carry more critical semantic load.
+  \item \textbf{Adaptive Variance Control (AVC):} +2\% to +4\% in multiple tables, effectively preventing collapsed representations and ensuring robust distribution of activation ranges.
+  \item \textbf{Quantization Loss (QL):} +1\% to +2\% in moderate or higher bit-level quantization (1.5- or 2-bit), mitigating threshold-bound overlap errors.
+\end{itemize}
+
+\noindent\textbf{Synergistic Effects:}
+\begin{itemize}
+  \item ML + IB + OR combine well, helping the model nest crucial features into early sub-dimensions while keeping new appended dimensions unique.
+  \item AVC secures the overall variance across sub-dimensions, which is crucial for stable training in the presence of heavily pruned or quantized setups.
+\end{itemize}
+
+\subsection*{6. Model-Specific Observations: MB vs. MiniLM}
+
+\noindent\textbf{Modern BERT (MB):}
+\begin{itemize}
+    \item Higher absolute performance and slightly better tolerance for dimension reduction.
+    \item Gains from 2-bit or Hybrid remain consistently strong across $768\to96$ dims.
+    \item Tends to exhibit a $\sim2\%$--$5\%$ performance drop per halving of dimensions in the moderate range (768$\to$384$\to$192).
+\end{itemize}
+
+\noindent\textbf{MiniLM:}
+\begin{itemize}
+    \item Lower base dimension (e.g., 384 vs. MB's 768), so dimension reduction has a more immediate effect. 
+    \item Still maintains $\geq95\%$ of FP32 performance at 384 dims (e.g., 2-bit or Hybrid).
+    \item At 96 dims, 2-bit yields about $0.3712$ nDCG@10 vs. $0.3792$ in FP32, showing a $\approx2.1\%$ difference, which is relatively modest given the aggressive compression.
+\end{itemize}
+
+\subsection*{7. Key Takeaways for Real-World Deployment}
+
+\begin{itemize}
+  \item \textbf{Golden Middle:} 
+    \begin{itemize}
+        \item MB at 256--384 dims with 2-bit or Hybrid is an excellent balance: $90\%$+ memory savings, $\geq 95\%$ accuracy, and at least $2\times$ retrieval speedup.
+        \item MiniLM at around 192 dims with 2-bit or Hybrid shares similar benefits, albeit at a slightly lower overall baseline accuracy.
+    \end{itemize}
+  \item \textbf{Extremely Limited Memory:} 
+    \begin{itemize}
+        \item 1-bit or 1.5-bit quantization pushes storage savings above $93\%$, but practitioners must accept a $5$--$15\%$ performance gap from FP32 on lower dimensions.
+    \end{itemize}
+  \item \textbf{Designing for Truncated Use Cases:} Matryoshka Loss ensures that partial embeddings (e.g., first $d/2$ dimensions) remain meaningful for approximate retrieval, enabling adaptive resource usage.
+  \item \textbf{Combinational Effects:} 
+    \begin{itemize}
+        \item The synergy of Orthogonality and Information Bottleneck fosters dimension-wise uniqueness, essential for highly compressed regimes.
+        \item Adaptive Variance Control safeguards avoidance of "degenerate" embedding distributions during training transitions.
+    \end{itemize}
+\end{itemize}
+
+\end{document}

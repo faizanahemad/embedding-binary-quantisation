@@ -1,0 +1,99 @@
+
+
+\section{Related Work}  
+\label{sec:related_work}  
+  
+The rapid advancement of Natural Language Processing (NLP) and Information Retrieval (IR) has led to the development of large-scale models and high-dimensional embeddings, which often pose challenges in terms of storage and computational efficiency. To address these issues, various model compression techniques have been proposed. In this section, we review relevant literature on embedding models in IR, general compression methods for large language models (LLMs), compression and quantization of embeddings, efficient similarity computation, pruning and dimensionality reduction for embeddings, Matryoshka Representation Learning, and position our approach within this context.  
+  
+\subsection{Embedding Models in Information Retrieval}  
+  
+Embeddings play a crucial role in IR by transforming textual data into continuous vector spaces that capture semantic and syntactic information. Early models like Word2Vec \cite{mikolov2013distributed} and GloVe \cite{pennington2014glove} generated static word embeddings. The introduction of contextual embeddings with models such as BERT \cite{devlin2019bert} and RoBERTa \cite{liu2019roberta} significantly improved retrieval performance by capturing word meanings in context. However, these models are computationally intensive and require substantial storage, highlighting the need for more efficient embedding techniques.  
+  
+\subsection{General Methods for Compression of Large Language Models}  
+  
+Compressing large language models is essential for deploying NLP systems in resource-constrained environments. Several strategies have been proposed to reduce model size and computational requirements while maintaining performance.  
+  
+\subsubsection{Pruning}  
+  
+Pruning techniques eliminate redundant or less significant weights and neurons from neural networks. \citet{han2015deep} introduced \textit{Deep Compression}, which combines pruning, quantization, and Huffman coding to reduce model size. The \textit{Lottery Ticket Hypothesis} \cite{frankle2019lottery} suggests that sparse subnetworks can be found within randomly initialized dense networks, capable of matching the performance of the full model when trained in isolation.  
+  
+\subsubsection{Knowledge Distillation}  
+  
+Knowledge distillation transfers knowledge from a large, pre-trained teacher model to a smaller student model \cite{hinton2015distilling}. This approach has been effective in producing compact models with high performance. \citet{sanh2019distilbert} introduced \textit{DistilBERT}, a distilled version of BERT that retains much of its language understanding capabilities with fewer parameters. \citet{jiao2020tinybert} proposed \textit{TinyBERT}, employing distillation at both pre-training and fine-tuning stages.  
+  
+\subsubsection{Parameter-Efficient Training}  
+  
+Parameter-efficient training methods add small trainable components to fixed pre-trained models. \citet{houlsby2019parameter} introduced \textit{Adapters}, which enable fine-tuning with a minimal number of additional parameters. \citet{li2021prefix} proposed \textit{Prefix Tuning}, which prepends trainable vectors to the input embeddings, reducing the number of parameters needed for task adaptation.  
+  
+\subsubsection{Low-Rank Factorization}  
+  
+Low-rank factorization approximates weight matrices with lower-rank representations to reduce the number of parameters and computational cost. \citet{jaderberg2014speeding} and \citet{sainath2013low} applied this technique to convolutional and recurrent neural networks, respectively.  
+  
+\subsection{Compression and Quantization of Embeddings}  
+  
+Compressing embeddings specifically addresses storage and efficiency challenges in IR systems that handle large vocabularies and datasets.  
+  
+\subsubsection{Quantization Methods}  
+  
+Quantization reduces the precision of model weights and activations.  
+  
+\paragraph{Post-Training Quantization}  
+  
+Post-training quantization converts a pre-trained model's weights to lower precision without additional training \cite{jacob2018quantization}. While efficient, it may lead to performance degradation if the model is sensitive to quantization errors.  
+  
+\paragraph{Quantization-Aware Training}  
+  
+Quantization-Aware Training (QAT) incorporates quantization into the training process, allowing the model to adjust to quantization effects. \citet{hubara2017quantized} and \citet{mishra2018apprentice} demonstrated that QAT can achieve better performance than post-training quantization by minimizing quantization errors during training.  
+  
+\subsubsection{Binary and Ternary Embeddings}  
+  
+Binary embeddings represent data using binary codes, enabling efficient storage and fast similarity computations via bitwise operations. \citet{shen2018nash} introduced \textit{NASH}, which learns binary hashing codes for efficient similarity search. Ternary embeddings extend this concept by using three states per dimension \cite{shu2018compressing}.  
+  
+\subsubsection{Product Quantization}  
+  
+Product Quantization (PQ) \cite{jegou2010product} divides the embedding space into subspaces and quantizes each one separately. PQ enables efficient approximate nearest neighbor search and has been applied to compress embeddings in large-scale retrieval systems.  
+  
+\subsection{Efficient Similarity Computation}  
+  
+Efficient computation of similarity measures is critical for scalable IR applications.  
+  
+\subsubsection{Hamming Distance and Bitwise Operations}  
+  
+Binary embeddings allow for similarity computations using Hamming distance, which can be calculated rapidly using bitwise operations such as XOR and POPCOUNT. \citet{wang2017survey} provide a comprehensive survey of hashing techniques for efficient similarity search.  
+  
+\subsubsection{Locality-Sensitive Hashing}  
+  
+Locality-Sensitive Hashing (LSH) \cite{andoni2006near} hashes input items so that similar items are mapped to the same buckets with high probability, facilitating approximate nearest neighbor search in sub-linear time.  
+  
+\subsection{Pruning and Dimensionality Reduction for Embeddings}  
+  
+Reducing the dimensionality of embeddings can significantly decrease storage requirements and improve computational efficiency.  
+  
+\subsubsection{Dimensionality Reduction Techniques}  
+  
+\paragraph{Principal Component Analysis (PCA)}  
+  
+PCA \cite{jolliffe2016principal} reduces dimensionality by projecting data onto the top principal components that capture the most variance.  
+  
+\paragraph{Singular Value Decomposition (SVD)}  
+  
+SVD \cite{golub1971singular} factorizes a matrix into singular vectors and values, allowing for approximation of the original data with lower-rank representations.  
+  
+\paragraph{Autoencoders}  
+  
+Autoencoders \cite{hinton2006reducing} are neural networks trained to reconstruct input data, effectively learning compressed representations in the hidden layers.  
+  
+\subsubsection{Embedding Pruning}  
+  
+Pruning less important dimensions based on criteria like variance or gradient norms can reduce embedding size. However, naive pruning may lead to significant performance loss due to the removal of critical information \cite{li2016pruning}.  
+  
+\subsection{Matryoshka Representation Learning}  
+  
+Matryoshka Representation Learning \cite{kusupati2021matryoshka} aims to create hierarchical embeddings where smaller embeddings are nested within larger ones, analogous to Russian nesting dolls. This approach allows models to adaptively use embeddings of different sizes based on resource constraints, without the need for retraining.  
+
+\redtodo{Briefly describe Matryoshka Representation Learning and how it has been used in prior work. Highlight the differences and how your approach extends or enhances this concept.}
+  
+\subsection{Our Approach in Context}  
+  
+While existing methods have made progress in compressing models and embeddings, challenges remain in balancing storage efficiency, computational speed, and performance. Our work distinguishes itself by integrating Matryoshka Representation Learning with advanced quantization techniques, including novel 0.5-bit and 1.5-bit quantization levels, and efficient bitwise operations for similarity computation. Additionally, our hybrid architecture assigns different quantization levels to embedding segments based on information content, optimizing both storage and retrieval speed without significant performance degradation. This comprehensive approach offers a flexible and efficient solution for embedding compression in IR and NLP applications.  
+

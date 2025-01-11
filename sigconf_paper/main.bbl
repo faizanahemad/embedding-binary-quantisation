@@ -1,0 +1,403 @@
+%%% -*-BibTeX-*-
+%%% Do NOT edit. File created by BibTeX with style
+%%% ACM-Reference-Format-Journals [18-Jan-2012].
+
+\begin{thebibliography}{21}
+
+%%% ====================================================================
+%%% NOTE TO THE USER: you can override these defaults by providing
+%%% customized versions of any of these macros before the \bibliography
+%%% command.  Each of them MUST provide its own final punctuation,
+%%% except for \shownote{}, \showDOI{}, and \showURL{}.  The latter two
+%%% do not use final punctuation, in order to avoid confusing it with
+%%% the Web address.
+%%%
+%%% To suppress output of a particular field, define its macro to expand
+%%% to an empty string, or better, \unskip, like this:
+%%%
+%%% \newcommand{\showDOI}[1]{\unskip}   % LaTeX syntax
+%%%
+%%% \def \showDOI #1{\unskip}           % plain TeX syntax
+%%%
+%%% ====================================================================
+
+\ifx \showCODEN    \undefined \def \showCODEN     #1{\unskip}     \fi
+\ifx \showDOI      \undefined \def \showDOI       #1{#1}\fi
+\ifx \showISBNx    \undefined \def \showISBNx     #1{\unskip}     \fi
+\ifx \showISBNxiii \undefined \def \showISBNxiii  #1{\unskip}     \fi
+\ifx \showISSN     \undefined \def \showISSN      #1{\unskip}     \fi
+\ifx \showLCCN     \undefined \def \showLCCN      #1{\unskip}     \fi
+\ifx \shownote     \undefined \def \shownote      #1{#1}          \fi
+\ifx \showarticletitle \undefined \def \showarticletitle #1{#1}   \fi
+\ifx \showURL      \undefined \def \showURL       {\relax}        \fi
+% The following commands are used for tagged output and should be
+% invisible to TeX
+\providecommand\bibfield[2]{#2}
+\providecommand\bibinfo[2]{#2}
+\providecommand\natexlab[1]{#1}
+\providecommand\showeprint[2][]{arXiv:#2}
+
+\bibitem[Bondarenko et~al\mbox{.}(2020)]%
+        {bondarenko2020overview}
+\bibfield{author}{\bibinfo{person}{Alexander Bondarenko}, \bibinfo{person}{Maik
+  Fr\"{o}be}, \bibinfo{person}{Meriem Beloucif}, \bibinfo{person}{Lukas
+  Gienapp}, \bibinfo{person}{Yamen Ajjour}, \bibinfo{person}{Alexander
+  Panchenko}, \bibinfo{person}{Chris Biemann}, \bibinfo{person}{Benno Stein},
+  \bibinfo{person}{Henning Wachsmuth}, \bibinfo{person}{Martin Potthast}, {and}
+  \bibinfo{person}{Matthias Hagen}.} \bibinfo{year}{2020}\natexlab{}.
+\newblock \showarticletitle{Overview of Touch\'{e} 2020: Argument Retrieval:
+  Extended Abstract}. In \bibinfo{booktitle}{\emph{Experimental IR Meets
+  Multilinguality, Multimodality, and Interaction: 11th International
+  Conference of the CLEF Association, CLEF 2020, Thessaloniki, Greece,
+  September 22–25, 2020, Proceedings}} (Thessaloniki, Greece).
+  \bibinfo{publisher}{Springer-Verlag}, \bibinfo{address}{Berlin, Heidelberg},
+  \bibinfo{pages}{384–395}.
+\newblock
+\showISBNx{978-3-030-58218-0}
+\urldef\tempurl%
+\url{https://doi.org/10.1007/978-3-030-58219-7_26}
+\showDOI{\tempurl}
+
+
+\bibitem[Boteva et~al\mbox{.}(2016)]%
+        {boteva2016full}
+\bibfield{author}{\bibinfo{person}{Vera Boteva}, \bibinfo{person}{Demian
+  Gholipour}, \bibinfo{person}{Artem Sokolov}, {and} \bibinfo{person}{Stefan
+  Riezler}.} \bibinfo{year}{2016}\natexlab{}.
+\newblock \showarticletitle{A Full-Text Learning to Rank Dataset for Medical
+  Information Retrieval}.
+\newblock \bibinfo{journal}{\emph{Proceedings of the 38th European Conference
+  on Information Retrieval}}.
+\newblock
+\urldef\tempurl%
+\url{http://www.cl.uni-heidelberg.de/~riezler/publications/papers/ECIR2016.pdf}
+\showURL{%
+\tempurl}
+
+
+\bibitem[Cohan et~al\mbox{.}(2020)]%
+        {specter2020cohan}
+\bibfield{author}{\bibinfo{person}{Arman Cohan}, \bibinfo{person}{Sergey
+  Feldman}, \bibinfo{person}{Iz Beltagy}, \bibinfo{person}{Doug Downey}, {and}
+  \bibinfo{person}{Daniel~S. Weld}.} \bibinfo{year}{2020}\natexlab{}.
+\newblock \showarticletitle{SPECTER: Document-level Representation Learning
+  using Citation-informed Transformers}. In \bibinfo{booktitle}{\emph{ACL}}.
+\newblock
+
+
+\bibitem[Diggelmann et~al\mbox{.}(2020)]%
+        {diggelmann2020climatefever}
+\bibfield{author}{\bibinfo{person}{Thomas Diggelmann}, \bibinfo{person}{Jordan
+  Boyd-Graber}, \bibinfo{person}{Jannis Bulian}, \bibinfo{person}{Massimiliano
+  Ciaramita}, {and} \bibinfo{person}{Markus Leippold}.}
+  \bibinfo{year}{2020}\natexlab{}.
+\newblock \bibinfo{title}{CLIMATE-FEVER: A Dataset for Verification of
+  Real-World Climate Claims}.
+\newblock
+\newblock
+\showeprint[arxiv]{2012.00614}~[cs.CL]
+
+
+\bibitem[Hasibi et~al\mbox{.}(2017)]%
+        {hasibi2017dbpedia}
+\bibfield{author}{\bibinfo{person}{Faegheh Hasibi}, \bibinfo{person}{Fedor
+  Nikolaev}, \bibinfo{person}{Chenyan Xiong}, \bibinfo{person}{Krisztian
+  Balog}, \bibinfo{person}{Svein~Erik Bratsberg}, \bibinfo{person}{Alexander
+  Kotov}, {and} \bibinfo{person}{Jamie Callan}.}
+  \bibinfo{year}{2017}\natexlab{}.
+\newblock \showarticletitle{DBpedia-Entity v2: A Test Collection for Entity
+  Search}. In \bibinfo{booktitle}{\emph{Proceedings of the 40th International
+  ACM SIGIR Conference on Research and Development in Information Retrieval}}
+  (Shinjuku, Tokyo, Japan) \emph{(\bibinfo{series}{SIGIR '17})}.
+  \bibinfo{publisher}{Association for Computing Machinery},
+  \bibinfo{address}{New York, NY, USA}, \bibinfo{pages}{1265–1268}.
+\newblock
+\showISBNx{9781450350228}
+\urldef\tempurl%
+\url{https://doi.org/10.1145/3077136.3080751}
+\showDOI{\tempurl}
+
+
+\bibitem[Hoogeveen et~al\mbox{.}(2015)]%
+        {hoogeveen2015cqadupstack}
+\bibfield{author}{\bibinfo{person}{Doris Hoogeveen}, \bibinfo{person}{Karin~M.
+  Verspoor}, {and} \bibinfo{person}{Timothy Baldwin}.}
+  \bibinfo{year}{2015}\natexlab{}.
+\newblock \showarticletitle{CQADupStack: A Benchmark Data Set for Community
+  Question-Answering Research}. In \bibinfo{booktitle}{\emph{Proceedings of the
+  20th Australasian Document Computing Symposium (ADCS)}} (Parramatta, NSW,
+  Australia) \emph{(\bibinfo{series}{ADCS '15})}. \bibinfo{publisher}{ACM},
+  \bibinfo{address}{New York, NY, USA}, Article \bibinfo{articleno}{3},
+  \bibinfo{numpages}{8}~pages.
+\newblock
+\showISBNx{978-1-4503-4040-3}
+\urldef\tempurl%
+\url{https://doi.org/10.1145/2838931.2838934}
+\showDOI{\tempurl}
+
+
+\bibitem[Iyer et~al\mbox{.}(2017)]%
+        {iyer2017first}
+\bibfield{author}{\bibinfo{person}{Shankar Iyer}, \bibinfo{person}{Nikhil
+  Dandekar}, {and} \bibinfo{person}{Korn{\'e}l Csernai}.}
+  \bibinfo{year}{2017}\natexlab{}.
+\newblock \showarticletitle{First Quora Dataset Release: Question Pairs}. In
+  \bibinfo{booktitle}{\emph{Proceedings of the 26th International Conference on
+  World Wide Web Companion}}. \bibinfo{publisher}{International World Wide Web
+  Conferences Steering Committee}, \bibinfo{address}{Perth, Australia}.
+\newblock
+
+
+\bibitem[Kusupati et~al\mbox{.}(2022)]%
+        {kusupati2021matryoshka}
+\bibfield{author}{\bibinfo{person}{Aditya Kusupati}, \bibinfo{person}{Gantavya
+  Bhatt}, \bibinfo{person}{Aniket Rege}, \bibinfo{person}{Matthew Wallingford},
+  \bibinfo{person}{Aditya Sinha}, \bibinfo{person}{Vivek Ramanujan},
+  \bibinfo{person}{William Howard-Snyder}, \bibinfo{person}{Kaifeng Chen},
+  \bibinfo{person}{Sham Kakade}, \bibinfo{person}{Prateek Jain}, {and}
+  \bibinfo{person}{Ali Farhadi}.} \bibinfo{year}{2022}\natexlab{}.
+\newblock \showarticletitle{Matryoshka Representation Learning}. In
+  \bibinfo{booktitle}{\emph{Advances in Neural Information Processing
+  Systems}}, \bibfield{editor}{\bibinfo{person}{S.~Koyejo},
+  \bibinfo{person}{S.~Mohamed}, \bibinfo{person}{A.~Agarwal},
+  \bibinfo{person}{D.~Belgrave}, \bibinfo{person}{K.~Cho}, {and}
+  \bibinfo{person}{A.~Oh}} (Eds.), Vol.~\bibinfo{volume}{35}.
+  \bibinfo{publisher}{Curran Associates, Inc.}, \bibinfo{pages}{30233--30249}.
+\newblock
+\urldef\tempurl%
+\url{https://proceedings.neurips.cc/paper_files/paper/2022/file/c32319f4868da7613d78af9993100e42-Paper-Conference.pdf}
+\showURL{%
+\tempurl}
+
+
+\bibitem[Kwiatkowski et~al\mbox{.}(2019)]%
+        {kwiatkowski2019natural}
+\bibfield{author}{\bibinfo{person}{Tom Kwiatkowski},
+  \bibinfo{person}{Jennimaria Palomaki}, \bibinfo{person}{Olivia Redfield},
+  \bibinfo{person}{Michael Collins}, \bibinfo{person}{Ankur Parikh},
+  \bibinfo{person}{Chris Alberti}, \bibinfo{person}{Danielle Epstein},
+  \bibinfo{person}{Illia Polosukhin}, \bibinfo{person}{Jacob Devlin},
+  \bibinfo{person}{Kenton Lee}, \bibinfo{person}{Kristina Toutanova},
+  \bibinfo{person}{Llion Jones}, \bibinfo{person}{Matthew Kelcey},
+  \bibinfo{person}{Ming-Wei Chang}, \bibinfo{person}{Andrew~M. Dai},
+  \bibinfo{person}{Jakob Uszkoreit}, \bibinfo{person}{Quoc Le}, {and}
+  \bibinfo{person}{Slav Petrov}.} \bibinfo{year}{2019}\natexlab{}.
+\newblock \showarticletitle{Natural Questions: A Benchmark for Question
+  Answering Research}.
+\newblock \bibinfo{journal}{\emph{Transactions of the Association for
+  Computational Linguistics}}  \bibinfo{volume}{7} (\bibinfo{year}{2019}),
+  \bibinfo{pages}{452--466}.
+\newblock
+\urldef\tempurl%
+\url{https://doi.org/10.1162/tacl_a_00276}
+\showDOI{\tempurl}
+
+
+\bibitem[Muennighoff et~al\mbox{.}(2022)]%
+        {muennighoff2022mteb}
+\bibfield{author}{\bibinfo{person}{Niklas Muennighoff},
+  \bibinfo{person}{Nouamane Tazi}, \bibinfo{person}{Lo{\"\i}c Magne}, {and}
+  \bibinfo{person}{Nils Reimers}.} \bibinfo{year}{2022}\natexlab{}.
+\newblock \showarticletitle{MTEB: Massive Text Embedding Benchmark}.
+\newblock \bibinfo{journal}{\emph{arXiv preprint arXiv:2210.07316}}
+  (\bibinfo{year}{2022}).
+\newblock
+\urldef\tempurl%
+\url{https://doi.org/10.48550/ARXIV.2210.07316}
+\showDOI{\tempurl}
+
+
+\bibitem[Nguyen et~al\mbox{.}(2016)]%
+        {nguyen2016ms}
+\bibfield{author}{\bibinfo{person}{Tri Nguyen}, \bibinfo{person}{Mir
+  Rosenberg}, \bibinfo{person}{Xia Song}, \bibinfo{person}{Jianfeng Gao},
+  \bibinfo{person}{Saurabh Tiwary}, \bibinfo{person}{Rangan Majumder}, {and}
+  \bibinfo{person}{Li Deng}.} \bibinfo{year}{2016}\natexlab{}.
+\newblock \showarticletitle{{MS} {MARCO:} {A} Human Generated MAchine Reading
+  COmprehension Dataset}.
+\newblock \bibinfo{journal}{\emph{CoRR}}  \bibinfo{volume}{abs/1611.09268}
+  (\bibinfo{year}{2016}).
+\newblock
+\showeprint[arxiv]{1611.09268}
+\urldef\tempurl%
+\url{http://arxiv.org/abs/1611.09268}
+\showURL{%
+\tempurl}
+
+
+\bibitem[Nussbaum et~al\mbox{.}(2024)]%
+        {nussbaum2024nomic}
+\bibfield{author}{\bibinfo{person}{Zach Nussbaum}, \bibinfo{person}{John~X.
+  Morris}, \bibinfo{person}{Brandon Duderstadt}, {and} \bibinfo{person}{Andriy
+  Mulyar}.} \bibinfo{year}{2024}\natexlab{}.
+\newblock \bibinfo{title}{Nomic Embed: Training a Reproducible Long Context
+  Text Embedder}.
+\newblock
+\newblock
+\showeprint[arxiv]{2402.01613}~[cs.CL]
+
+
+\bibitem[Reimers and Gurevych(2019)]%
+        {reimers-2019-sentence-bert}
+\bibfield{author}{\bibinfo{person}{Nils Reimers} {and} \bibinfo{person}{Iryna
+  Gurevych}.} \bibinfo{year}{2019}\natexlab{}.
+\newblock \showarticletitle{Sentence-BERT: Sentence Embeddings using Siamese
+  BERT-Networks}. In \bibinfo{booktitle}{\emph{Proceedings of the 2019
+  Conference on Empirical Methods in Natural Language Processing}}.
+  \bibinfo{publisher}{Association for Computational Linguistics}.
+\newblock
+\urldef\tempurl%
+\url{http://arxiv.org/abs/1908.10084}
+\showURL{%
+\tempurl}
+
+
+\bibitem[Roberts et~al\mbox{.}(2021)]%
+        {voorhees2021trec}
+\bibfield{author}{\bibinfo{person}{Kirk Roberts}, \bibinfo{person}{Tasmeer
+  Alam}, \bibinfo{person}{Steven Bedrick}, \bibinfo{person}{Dina
+  Demner{-}Fushman}, \bibinfo{person}{Kyle Lo}, \bibinfo{person}{Ian Soboroff},
+  \bibinfo{person}{Ellen~M. Voorhees}, \bibinfo{person}{Lucy~Lu Wang}, {and}
+  \bibinfo{person}{William~R. Hersh}.} \bibinfo{year}{2021}\natexlab{}.
+\newblock \showarticletitle{Searching for Scientific Evidence in a Pandemic: An
+  Overview of {TREC-COVID}}.
+\newblock \bibinfo{journal}{\emph{CoRR}}  \bibinfo{volume}{abs/2104.09632}
+  (\bibinfo{year}{2021}).
+\newblock
+\showeprint[arXiv]{2104.09632}
+\urldef\tempurl%
+\url{https://arxiv.org/abs/2104.09632}
+\showURL{%
+\tempurl}
+
+
+\bibitem[Thakur et~al\mbox{.}(2021)]%
+        {thakur2021beir}
+\bibfield{author}{\bibinfo{person}{Nandan Thakur}, \bibinfo{person}{Nils
+  Reimers}, \bibinfo{person}{Andreas R{\"u}ckl{\'e}}, \bibinfo{person}{Abhishek
+  Srivastava}, {and} \bibinfo{person}{Iryna Gurevych}.}
+  \bibinfo{year}{2021}\natexlab{}.
+\newblock \showarticletitle{{BEIR}: A Heterogeneous Benchmark for Zero-shot
+  Evaluation of Information Retrieval Models}. In
+  \bibinfo{booktitle}{\emph{Thirty-fifth Conference on Neural Information
+  Processing Systems Datasets and Benchmarks Track (Round 2)}}.
+\newblock
+\urldef\tempurl%
+\url{https://openreview.net/forum?id=wCu6T5xFjeJ}
+\showURL{%
+\tempurl}
+
+
+\bibitem[Thorne et~al\mbox{.}(2018)]%
+        {thorne2018fever}
+\bibfield{author}{\bibinfo{person}{James Thorne}, \bibinfo{person}{Andreas
+  Vlachos}, \bibinfo{person}{Christos Christodoulopoulos}, {and}
+  \bibinfo{person}{Arpit Mittal}.} \bibinfo{year}{2018}\natexlab{}.
+\newblock \showarticletitle{{FEVER}: a Large-scale Dataset for Fact Extraction
+  and {VER}ification}. In \bibinfo{booktitle}{\emph{Proceedings of the 2018
+  Conference of the North {A}merican Chapter of the Association for
+  Computational Linguistics: Human Language Technologies, Volume 1 (Long
+  Papers)}}, \bibfield{editor}{\bibinfo{person}{Marilyn Walker},
+  \bibinfo{person}{Heng Ji}, {and} \bibinfo{person}{Amanda Stent}} (Eds.).
+  \bibinfo{publisher}{Association for Computational Linguistics},
+  \bibinfo{address}{New Orleans, Louisiana}, \bibinfo{pages}{809--819}.
+\newblock
+\urldef\tempurl%
+\url{https://doi.org/10.18653/v1/N18-1074}
+\showDOI{\tempurl}
+
+
+\bibitem[Wachsmuth et~al\mbox{.}(2018)]%
+        {wachsmuth-etal-2018-retrieval}
+\bibfield{author}{\bibinfo{person}{Henning Wachsmuth}, \bibinfo{person}{Shahbaz
+  Syed}, {and} \bibinfo{person}{Benno Stein}.} \bibinfo{year}{2018}\natexlab{}.
+\newblock \showarticletitle{Retrieval of the Best Counterargument without Prior
+  Topic Knowledge}. In \bibinfo{booktitle}{\emph{Proceedings of the 56th Annual
+  Meeting of the Association for Computational Linguistics (Volume 1: Long
+  Papers)}}, \bibfield{editor}{\bibinfo{person}{Iryna Gurevych} {and}
+  \bibinfo{person}{Yusuke Miyao}} (Eds.). \bibinfo{publisher}{Association for
+  Computational Linguistics}, \bibinfo{address}{Melbourne, Australia},
+  \bibinfo{pages}{241--251}.
+\newblock
+\urldef\tempurl%
+\url{https://doi.org/10.18653/v1/P18-1023}
+\showDOI{\tempurl}
+
+
+\bibitem[Wadden et~al\mbox{.}(2020)]%
+        {wadden2020fact}
+\bibfield{author}{\bibinfo{person}{David Wadden}, \bibinfo{person}{Shanchuan
+  Lin}, \bibinfo{person}{Kyle Lo}, \bibinfo{person}{Lucy~Lu Wang},
+  \bibinfo{person}{Madeleine van Zuylen}, \bibinfo{person}{Arman Cohan}, {and}
+  \bibinfo{person}{Hannaneh Hajishirzi}.} \bibinfo{year}{2020}\natexlab{}.
+\newblock \showarticletitle{Fact or Fiction: Verifying Scientific Claims}. In
+  \bibinfo{booktitle}{\emph{Proceedings of the 2020 Conference on Empirical
+  Methods in Natural Language Processing (EMNLP)}}.
+  \bibinfo{publisher}{Association for Computational Linguistics},
+  \bibinfo{address}{Online}, \bibinfo{pages}{7534--7550}.
+\newblock
+\urldef\tempurl%
+\url{https://doi.org/10.18653/v1/2020.emnlp-main.609}
+\showDOI{\tempurl}
+
+
+\bibitem[Wang et~al\mbox{.}(2020)]%
+        {minilm}
+\bibfield{author}{\bibinfo{person}{Wenhui Wang}, \bibinfo{person}{Furu Wei},
+  \bibinfo{person}{Li Dong}, \bibinfo{person}{Hangbo Bao}, \bibinfo{person}{Nan
+  Yang}, {and} \bibinfo{person}{Ming Zhou}.} \bibinfo{year}{2020}\natexlab{}.
+\newblock \showarticletitle{MINILM: deep self-attention distillation for
+  task-agnostic compression of pre-trained transformers}. In
+  \bibinfo{booktitle}{\emph{Proceedings of the 34th International Conference on
+  Neural Information Processing Systems}} (Vancouver, BC, Canada)
+  \emph{(\bibinfo{series}{NIPS '20})}. \bibinfo{publisher}{Curran Associates
+  Inc.}, \bibinfo{address}{Red Hook, NY, USA}, Article
+  \bibinfo{articleno}{485}, \bibinfo{numpages}{13}~pages.
+\newblock
+\showISBNx{9781713829546}
+
+
+\bibitem[Warner et~al\mbox{.}(2024)]%
+        {modernbert}
+\bibfield{author}{\bibinfo{person}{Benjamin Warner}, \bibinfo{person}{Antoine
+  Chaffin}, \bibinfo{person}{Benjamin Clavié}, \bibinfo{person}{Orion Weller},
+  \bibinfo{person}{Oskar Hallström}, \bibinfo{person}{Said Taghadouini},
+  \bibinfo{person}{Alexis Gallagher}, \bibinfo{person}{Raja Biswas},
+  \bibinfo{person}{Faisal Ladhak}, \bibinfo{person}{Tom Aarsen},
+  \bibinfo{person}{Nathan Cooper}, \bibinfo{person}{Griffin Adams},
+  \bibinfo{person}{Jeremy Howard}, {and} \bibinfo{person}{Iacopo Poli}.}
+  \bibinfo{year}{2024}\natexlab{}.
+\newblock \bibinfo{title}{Smarter, Better, Faster, Longer: A Modern
+  Bidirectional Encoder for Fast, Memory Efficient, and Long Context Finetuning
+  and Inference}.
+\newblock
+\newblock
+\showeprint[arxiv]{2412.13663}~[cs.CL]
+\urldef\tempurl%
+\url{https://arxiv.org/abs/2412.13663}
+\showURL{%
+\tempurl}
+
+
+\bibitem[Yang et~al\mbox{.}(2018)]%
+        {yang2018hotpotqa}
+\bibfield{author}{\bibinfo{person}{Zhilin Yang}, \bibinfo{person}{Peng Qi},
+  \bibinfo{person}{Saizheng Zhang}, \bibinfo{person}{Yoshua Bengio},
+  \bibinfo{person}{William Cohen}, \bibinfo{person}{Ruslan Salakhutdinov},
+  {and} \bibinfo{person}{Christopher~D. Manning}.}
+  \bibinfo{year}{2018}\natexlab{}.
+\newblock \showarticletitle{{H}otpot{QA}: A Dataset for Diverse, Explainable
+  Multi-hop Question Answering}. In \bibinfo{booktitle}{\emph{Proceedings of
+  the 2018 Conference on Empirical Methods in Natural Language Processing}},
+  \bibfield{editor}{\bibinfo{person}{Ellen Riloff}, \bibinfo{person}{David
+  Chiang}, \bibinfo{person}{Julia Hockenmaier}, {and}
+  \bibinfo{person}{Jun{'}ichi Tsujii}} (Eds.). \bibinfo{publisher}{Association
+  for Computational Linguistics}, \bibinfo{address}{Brussels, Belgium},
+  \bibinfo{pages}{2369--2380}.
+\newblock
+\urldef\tempurl%
+\url{https://doi.org/10.18653/v1/D18-1259}
+\showDOI{\tempurl}
+
+
+\end{thebibliography}
