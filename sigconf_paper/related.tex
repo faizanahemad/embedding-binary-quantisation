@@ -17,7 +17,9 @@ Adapters~\cite{houlsby2019parameter}, Prefix Tuning~\cite{li2021prefix}, and oth
 Both post-training~\cite{jacob2018quantization} and quantization-aware training~\cite{hubara2017quantized,mishra2018apprentice} constrain numerical precision. Binary and ternary embeddings~\cite{shen2018nash, shu2018compressing} operate efficiently via bitwise operations. Product Quantization~\cite{jegou2010product} partitions embeddings into sub-vectors for approximate nearest neighbor search.
 
 \paragraph{Dimensionality Reduction and Pruning for Embeddings}
-Methods like PCA~\cite{jolliffe2016principal}, SVD~\cite{golub1971singular}, and autoencoders~\cite{hinton2006reducing} systematically compress embeddings. Pruning low-variance dimensions~\cite{li2016pruning} can yield more compact models with minimal loss in semantic fidelity.
+Methods like PCA~\cite{jolliffe2016principal}, SVD~\cite{golub1971singular}, and autoencoders~\cite{hinton2006reducing} systematically compress embeddings, while t-SNE and UMAP focus primarily on visualization by preserving local neighborhoods at the expense of global structure and are unsuitable for information retrieval tasks due to their non-parametric nature and inability to process new data without recomputation. 
+In contrast, our approach creates hierarchical, nested embeddings through explicit loss functions that concentrate essential semantic information in early dimensions while maintaining cross-scale consistency, enabling dynamic dimension selection without retraining and preserving both local and global relationships crucial for retrieval tasks. 
+Pruning low-variance dimensions~\cite{li2016pruning} can yield more compact models with minimal loss in semantic fidelity, but lacks the systematic information organization and quantization awareness of our approach.
 
 \paragraph{Efficient Similarity Computation}
 In large-scale IR, hashed or binarized representations expedite retrieval via Hamming distance (XOR, POPCOUNT)~\cite{wang2017survey}, or via Locality-Sensitive Hashing (LSH)~\cite{andoni2006near} to approximate nearest neighbors.

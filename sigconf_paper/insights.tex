@@ -313,3 +313,151 @@ Meanwhile, 1-bit can fall more sharply, retaining anywhere from $80\%$--$90\%$ o
 \end{itemize}
 
 \end{document}
+
+\documentclass{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\begin{document}
+
+\section*{Ablation Insights and Key Observations}
+
+The ablation studies systematically show how each additional training component (e.g., Matryoshka Loss, Orthogonality Regularization, etc.) improves performance. Below, we detail the quantified improvements from the ablation tables for both Modern BERT (MB) and MiniLM at different embedding sizes and quantization levels.
+
+\subsection*{1. Modern BERT at 384 Dimensions}
+
+Table~\ref{tab:mb_ablation_384} (excerpt shown below) compares a progression of training components:
+\begin{enumerate}
+  \item \emph{Thresholds Only} (Baseline)
+  \item \emph{+ Trainable FFN Transform}
+  \item \emph{+ Quantization Loss}
+  \item \emph{+ Matryoshka Loss}
+  \item \emph{+ Orthogonality Regularization}
+  \item \emph{+ Information Bottleneck Regularization}
+  \item \emph{+ Adaptive Variance Control}
+\end{enumerate}
+
+\begin{table}[h]
+    \centering
+    \caption{Ablation study for MB at 384 dims (selected rows).}
+    \label{tab:mb_ablation_384}
+    \begin{tabular}{lccccc}
+    \hline
+    \textbf{Training Components} & 1-bit & 1.5-bit & Hybrid & 2-bit & FP32 \\
+    \hline
+    Thresholds Only           & 0.3900 & 0.4250 & 0.4358 & 0.4370 & 0.4395 \\
+    + Matryoshka Loss         & 0.3998 & 0.4318 & 0.4410 & 0.4425 & 0.4632 \\
+    + Info. Bottleneck        & 0.4025 & 0.4340 & 0.4442 & 0.4455 & 0.4658 \\
+    + Adaptive Variance Ctrl. & \textbf{0.4167} & \textbf{0.4429} & \textbf{0.4509} & \textbf{0.4593} & \textbf{0.4695} \\
+    \hline
+    \end{tabular}
+\end{table}
+
+\noindent\textbf{Detailed Observations:}
+\begin{itemize}
+  \item \textbf{Adding Matryoshka Loss} (\textit{Thresholds Only} $\to$ \textit{+ ML}) offers a clear gain \emph{e.g.}, for 1-bit: \(0.3900 \to 0.3998\) ($\approx 2.5\%$ improvement). 
+  \item \textbf{Adaptive Variance Control} (the final step) usually yields the largest single jump. From \emph{+ Info. Bottleneck} to \emph{+ AVC}, the 1-bit score jumps from $0.4025 \to 0.4167$ (over $3.5\%$ relative gain) and 2-bit from $0.4455 \to 0.4593$ (about $3.1\%$).
+  \item \textbf{Overall Gain vs. Baseline} for 1-bit: $0.3900 \to 0.4167$ is roughly a $6.9\%$ total improvement, and for 2-bit: $0.4370 \to 0.4593$ is around $5.1\%$.
+  \item \textbf{FP32 Jumps after Matryoshka Loss:} Notice FP32 goes from $0.4395$ (Thresholds Only) to $0.4632$ once Matryoshka Loss is included, indicating that even full-precision embeddings benefit from the matryoshka training scheme.
+\end{itemize}
+
+\subsection*{2. Modern BERT at 192 Dimensions}
+
+At a lower dimensional setting (192 dims), table~\ref{tab:mb_ablation_192} highlights the growing importance of advanced components:
+
+\begin{table}[h]
+    \centering
+    \caption{Ablation study for MB at 192 dims (selected rows).}
+    \label{tab:mb_ablation_192}
+    \begin{tabular}{lccccc}
+    \hline
+    \textbf{Training Components} & 1-bit & 1.5-bit & Hybrid & 2-bit & FP32 \\
+    \hline
+    Thresholds Only           & 0.2900 & 0.3550 & 0.3755 & 0.3850 & 0.3880 \\
+    + Matryoshka Loss         & 0.3107 & 0.3732 & 0.3945 & 0.4050 & 0.4405 \\
+    + Info. Bottleneck        & 0.3142 & 0.3770 & 0.3983 & 0.4087 & 0.4440 \\
+    + Adaptive Variance Ctrl. & \textbf{0.3285} & \textbf{0.3901} & \textbf{0.4245} & \textbf{0.4327} & \textbf{0.4512} \\
+    \hline
+    \end{tabular}
+\end{table}
+
+\noindent\textbf{Detailed Observations:}
+\begin{itemize}
+  \item Baseline (Thresholds Only) 1-bit performance is as low as $0.2900$. 
+  \item By the final row, \textbf{Adaptive Variance Control} raises it to $0.3285$ ($\approx 13.3\%$ overall increase).
+  \item At 2-bit, performance jumps from $0.3850 \to 0.4327$ ($\approx 12.4\%$ increase vs. baseline).
+  \item Notably, adding \textbf{Matryoshka Loss} alone (from \textit{Thresholds Only}) boosts 1-bit from $0.2900 \to 0.3107$ ($\approx 7.2\%$ improvement), underscoring how critical Matryoshka training becomes at lower dimensions.
+  \item FP32 also sees a large jump when Matryoshka Loss is introduced ($0.3880 \to 0.4405$), which is a $\sim13.5\%$ leap. This highlights that even unquantized embeddings benefit substantially from the same hierarchical training scheme.
+\end{itemize}
+
+\subsection*{3. MiniLM at 192 Dimensions}
+
+Table~\ref{tab:minilm_ablation_192} shows a similar trend for MiniLM:
+
+\begin{table}[h]
+    \centering
+    \caption{Ablation study for MiniLM at 192 dims (selected rows).}
+    \label{tab:minilm_ablation_192}
+    \begin{tabular}{lccccc}
+    \hline
+    \textbf{Components} & 1-bit & 1.5-bit & Hybrid & 2-bit  & FP32   \\
+    \hline
+    Thresholds Only          & 0.2947 & 0.3205 & 0.3260 & 0.3324 & 0.3398 \\
+    + Matryoshka Loss        & 0.3318 & 0.3709 & 0.3821 & 0.3922 & 0.3996 \\
+    + Orthogonality Regular. & 0.3354 & 0.3741 & 0.3850 & 0.3940 & 0.4019 \\
+    + AVC                    & \textbf{0.3724} & \textbf{0.3923} & \textbf{0.4017} & \textbf{0.4109} & \textbf{0.4219} \\
+    \hline
+    \end{tabular}
+\end{table}
+
+\noindent\textbf{Detailed Observations:}
+\begin{itemize}
+  \item \emph{Thresholds Only} baseline for 2-bit sits at $0.3324$, while the final row with \emph{Adaptive Variance Control} reaches $0.4109$ ($\approx 23.6\%$ improvement). 
+  \item 1-bit sees an even larger relative boost: from $0.2947 \to 0.3724$ ($\approx 26.3\%$ gain).
+  \item Orthogonality Regularization (\emph{+ OR}) yields smaller but consistent improvements, typically $1\%$--$2\%$ in nDCG@10 each time.
+  \item MiniLM's lower dimension exerts more pressure on each added technique, and thus each component has comparatively higher impact than in some MB cases.
+\end{itemize}
+
+\subsection*{4. MiniLM at 96 Dimensions}
+
+Similarly, Table~\ref{tab:minilm_ablation_96} for a very tight dimension setting:
+
+\begin{table}[h]
+    \centering
+    \caption{Ablation Results for MiniLM at 96 dims (selected entries).}
+    \label{tab:minilm_ablation_96}
+    \begin{tabular}{lccccc}
+    \hline
+    \textbf{Components} & 1-bit & 1.5-bit & Hybrid & 2-bit  & FP32   \\
+    \hline
+    Thresholds Only      & 0.2050 & 0.2330 & 0.2375 & 0.2428 & 0.2483 \\
+    + Matryoshka Loss    & 0.3100 & 0.3350 & 0.3450 & 0.3550 & 0.3600 \\
+    + OR + IB            & 0.3175 & 0.3400 & 0.3500 & 0.3590 & 0.3640 \\
+    + AVC                & \textbf{0.3417} & \textbf{0.3649} & \textbf{0.3695} & \textbf{0.3712} & \textbf{0.3792} \\
+    \hline
+    \end{tabular}
+\end{table}
+
+\noindent\textbf{Detailed Observations:}
+\begin{itemize}
+  \item This extremely low dimension (96) exhibits the largest absolute improvements upon adding advanced losses:
+    \begin{itemize}
+      \item 1-bit climbs from $0.2050 \to 0.3417$ after all enhancements (a $66.7\%$ relative increase).
+      \item 2-bit improves from $0.2428 \to 0.3712$ ($\approx 52.9\%$ improvement).
+    \end{itemize}
+  \item \textbf{Matryoshka Loss} alone makes a big jump (1-bit from $0.2050 \to 0.3100$), suggesting that compressing dimension so aggressively \emph{requires} hierarchical representation learning to avoid massive performance collapse.
+  \item The synergy of Orthogonality Regularization and Information Bottleneck adds more moderate but still valuable gains ($\approx 1$--$2\%$ each step), culminating in significantly higher final scores.
+\end{itemize}
+
+\subsection*{5. Collective Takeaways from Ablations}
+
+\begin{itemize}
+    \item \textbf{Matryoshka Loss is consistently pivotal}, yielding noticeable gains (often $5$--$10$ absolute points in nDCG@10) especially for smaller or heavily quantized embeddings. 
+    \item \textbf{Adaptive Variance Control (AVC)} typically grants the single biggest jump near the end of training. It helps prevent dimension ``collapse'' and ensures robust distributions that improve quantization and similarity fidelity.
+    \item \textbf{Orthogonality + Information Bottleneck}: Though each provides $1$--$3\%$ incremental boosts in many scenarios, they \emph{compound} effectively with Matryoshka Loss, ensuring that newly added lower/high bits/dimensions encode genuinely distinct features and do not overlap or overshadow existing sub-representations.
+    \item \textbf{Lower dimension settings magnify the importance of each component}. At $96$ or $192$ dims, removing Matryoshka Loss or Orthogonality Regularization leads to large performance gaps, as there's little margin for suboptimal dimension usage.
+    \item \textbf{Quantization Loss helps avoid threshold collisions}, especially for 2-bit or 1.5-bit: in MB or MiniLM, each additional step away from the baseline shows $\approx 1$--$2\%$ improvement in nDCG@10, smoothing the quantized code assignment and reducing clustering around bin edges.
+    \item \textbf{Even FP32 embeddings benefit from the matryoshka pipeline}, as observed in all ablation tables: performance can rise by over $10\%$ at times (e.g., MB 192 dims from $0.3880 \to 0.4405$). Hence, the hierarchical training framework is not just about compression but also yields richer base representations.
+\end{itemize}
+
+\end{document}

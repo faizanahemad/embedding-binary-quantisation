@@ -153,24 +153,31 @@
 %%
 %% The abstract is a short summary of the work to be presented in the
 %% article.
-\begin{abstract}  
-  High-dimensional embeddings are powerful tools in natural language processing and information retrieval, capturing intricate semantic relationships. 
-  However, their large size leads to increased storage requirements and slower retrieval speeds, posing challenges for deployment in resource-constrained environments. 
-  In this paper, we introduce \textbf{Tiny Embeddings}, a novel approach that combines \textit{Matryoshka Representation Learning}, advanced quantization techniques, and efficient bitwise operations to create compact and efficient embeddings. 
-  By augmenting existing models with additional feedforward neural network layers and specialized loss functions, we enforce the Matryoshka property, enabling the use of lower-dimensional embeddings without significant performance loss. 
-  We explore 0.5-bit, 1-bit, 1.5-bit, and 2-bit quantization levels to reduce storage by decreasing numeric precision. 
-  To further enhance retrieval speed, we extend the use of Hamming distance and similarity to multi-bit quantized embeddings by mapping them to binary representations, allowing efficient computation using bitwise CPU instructions like XOR, NOT, and POPCOUNT. 
-  Our hybrid architecture applies higher precision quantization to dimensions with more information content and lower precision to those with less, optimizing storage and performance. 
-  Experimental results demonstrate that our approach significantly reduces storage requirements and improves retrieval speeds while maintaining competitive accuracy compared to uncompressed embeddings.  
+
+% \begin{abstract}  
+%   High-dimensional embeddings are powerful tools in natural language processing and information retrieval, capturing intricate semantic relationships. 
+%   However, their large size leads to increased storage requirements and slower retrieval speeds, posing challenges for deployment in resource-constrained environments. 
+%   In this paper, we introduce \textbf{Tiny Embeddings}, a novel approach that combines \textit{Matryoshka Representation Learning}, advanced quantization techniques, and efficient bitwise operations to create compact and efficient embeddings. 
+%   By augmenting existing models with additional feedforward neural network layers and specialized loss functions, we enforce the Matryoshka property, enabling the use of lower-dimensional embeddings without significant performance loss. 
+%   We explore 0.5-bit, 1-bit, 1.5-bit, and 2-bit quantization levels to reduce storage by decreasing numeric precision. 
+%   To further enhance retrieval speed, we extend the use of Hamming distance and similarity to multi-bit quantized embeddings by mapping them to binary representations, allowing efficient computation using bitwise CPU instructions like XOR, NOT, and POPCOUNT. 
+%   Our hybrid architecture applies higher precision quantization to dimensions with more information content and lower precision to those with less, optimizing storage and performance. 
+%   Experimental results demonstrate that our approach significantly reduces storage requirements and improves retrieval speeds while maintaining competitive accuracy compared to uncompressed embeddings.  
   
-  \end{abstract} 
+% \end{abstract} 
 
 \begin{abstract}
-  We introduce \emph{Quantization Aware Matryoshka Adaptation (QAMA)}, a unified framework for creating compact yet semantically rich embeddings through \textbf{Matryoshka Representation Learning} and multi-level quantization. Our approach learns nested embeddings that gracefully shrink to smaller dimensional subsets and leverages bitwise operations (XOR, NOT, POPCOUNT) for efficient retrieval. By augmenting transformer-based encoders with lightweight feedforward layers and specialized regularization (Matryoshka Loss, Orthogonality, Information Bottleneck, and Quantization Loss), we produce quantization-friendly representations that preserve essential information in early dimensions.
+  We introduce \emph{Quantization Aware Matryoshka Adaptation (QAMA)}, a unified framework for creating compact yet semantically rich embeddings through \textbf{Matryoshka Representation Learning} and multi-level quantization. 
+  Our approach learns nested embeddings that gracefully shrink to smaller dimensional subsets and leverages bitwise operations (XOR, NOT, POPCOUNT) for efficient retrieval. 
+  By augmenting transformer-based encoders with lightweight feedforward layers and specialized regularization (Matryoshka Loss, Orthogonality, Information Bottleneck, and Quantization Loss), we produce quantization-friendly representations that preserve essential information in early dimensions.
 
-  We explore 0.5-bit, 1-bit, 1.5-bit, and 2-bit quantization levels, as well as a Hybrid Quantization scheme that adaptively allocates higher precision to dimensions with greater information content. Across extensive evaluations on Modern BERT (MB) and MiniLM models, \textbf{2-bit quantization} and \textbf{Hybrid Quant} consistently recover up to 95--98\% of the original full-precision (FP32) performance while reducing memory usage by over 90\%. Even at low embedding dimensions (e.g., 96--192), QAMA’s hierarchical training ensures that performance remains surprisingly robust, highlighting the effectiveness of our bit-level expansions and nested representation learning.
+  We explore 0.5-bit, 1-bit, 1.5-bit, and 2-bit quantization levels, as well as a Hybrid Quantization scheme that adaptively allocates higher precision to dimensions with greater information content. 
+  Across extensive evaluations on Modern BERT (MB) and MiniLM models, \textbf{2-bit quantization} and \textbf{Hybrid Quant} consistently recover up to 95--98\% of the original full-precision (FP32) performance while reducing memory usage by over 90\%. 
+  Even at low embedding dimensions (e.g., 96--192), QAMA’s hierarchical training ensures that performance remains surprisingly robust, highlighting the effectiveness of our bit-level expansions and nested representation learning.
 
-  Furthermore, our experiments show that end-to-end training with quantization-aware losses yields embeddings that map cleanly into discrete levels, supporting rapid Hamming distance calculations for large-scale retrieval. Ablation studies reveal that each component---Matryoshka Loss, Orthogonality, Information Bottleneck, and Adaptive Variance Control---contributes to preserving semantic fidelity under aggressive compression. Overall, \textbf{QAMA} offers a practical means to store and retrieve embeddings efficiently, enabling high-accuracy search under stringent memory and latency constraints.
+  Furthermore, our experiments show that end-to-end training with quantization-aware losses yields embeddings that map cleanly into discrete levels, supporting rapid Hamming distance calculations using bitwise operations for large-scale retrieval. 
+  Ablation studies reveal that our suggested component losses contributes to preserving semantic fidelity under aggressive compression. 
+  Our framework \textbf{QAMA} offers a practical means to store, retrieve, and compute similarities between embeddings efficiently, enabling high-accuracy search with faster retrieval speeds under stringent memory and latency constraints.
 \end{abstract}
 
 %%

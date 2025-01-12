@@ -52,3 +52,47 @@ For a query q, NDCG@10 is computed as:
 $\text{NDCG@10} = \frac{\text{DCG@10}}{\text{IDCG@10}} = \frac{\sum_{i=1}^{10} \frac{2^{rel_i} - 1}{\log_2(i+1)}}{\sum_{i=1}^{10} \frac{2^{rel_i^*} - 1}{\log_2(i+1)}}$
 
 where $rel_i$ is the relevance score of the document at position $i$ in the ranked list, and $rel_i^*$ is the relevance score of the document at position $i$ in the ideal ranking. The denominator IDCG@10 normalizes the score to [0,1], with 1 indicating perfect ranking.
+
+
+\textbf{Impact of Matryoshka Loss and Associated Regularizations:}
+As shown in the ablation studies (Tables~\ref{tab:mb_ablation_384}, \ref{tab:mb_ablation_192}, \ref{tab:minilm_ablation_192}, and \ref{tab:minilm_ablation_96}), the introduction of the Matryoshka Loss yields significant performance gains across all quantization levels and dimensions. 
+For instance, in Table~\ref{tab:mb_ablation_192} at 192 dimensions (2-bit), the Modern BERT (MB) model improves its nDCG@10 score from 0.3850 (\textit{Thresholds Only}) to 0.4050 upon adding Matryoshka Loss. 
+A larger jump is observed for MiniLM at 96 dimensions (Table~\ref{tab:minilm_ablation_96}), where 2-bit quantization increases from 0.2428 (\textit{Thresholds Only}) to 0.3550 when Matryoshka Loss is introduced—over a 46\% relative gain.
+
+Further improvements occur once Orthogonality and Information Bottleneck Regularizations are applied, especially at lower dimensions. 
+For example, in Table~\ref{tab:mb_ablation_192} with MB at 192 dimensions (2-bit), Orthogonality and Information Bottleneck Regularizations boost the nDCG@10 score from 0.4050 to 0.4087 before Adaptive Variance Control is even added, illustrating how newly added dimensions learn orthogonal (less redundant) features while penalizing unhelpful information in higher dimensions.
+
+\textbf{Adaptive Variance Control (AVC)} then provides an additional and sometimes substantial performance jump by preventing degenerate embedding distributions and refining the variance structure: 
+in Table~\ref{tab:mb_ablation_192} (MB at 192 dimensions, 2-bit), AVC lifts the nDCG@10 from 0.4087 to 0.4327, closing much of the gap to full-precision performance. 
+Likewise, for MiniLM at 96 dimensions (Table~\ref{tab:minilm_ablation_96}), cumulative additions of Matryoshka Loss and other regularizations yield 0.3590 at 2-bit—a marked improvement over 0.2428 (\textit{Thresholds Only})—and further rise to 0.3712 with AVC. 
+These incremental gains underscore the synergy among Matryoshka Loss, Orthogonality, Information Bottleneck, and AVC in enabling robust performance, even under aggressive compression settings.
+
+
+\textbf{Impact of Matryoshka Loss and Associated Regularizations:}
+As shown in the ablation studies (Tables~\ref{tab:mb_ablation_384}, \ref{tab:mb_ablation_192}, \ref{tab:minilm_ablation_192}, and \ref{tab:minilm_ablation_96}), the introduction of the Matryoshka Loss yields significant performance gains across all quantization levels and dimensions. 
+For instance, in Table~\ref{tab:mb_ablation_192} at 192 dimensions (2-bit), the Modern BERT (MB) model improves its nDCG@10 score from 0.3850 (\textit{Thresholds Only}) to 0.4050 upon adding Matryoshka Loss. 
+A larger jump is observed for MiniLM at 96 dimensions (Table~\ref{tab:minilm_ablation_96}), where 2-bit quantization increases from 0.2428 (\textit{Thresholds Only}) to 0.3550 when Matryoshka Loss is introduced—over a 46\% relative gain.
+
+Further improvements occur once Orthogonality and Information Bottleneck Regularizations are applied, especially at lower dimensions. 
+For example, in Table~\ref{tab:mb_ablation_192} with MB at 192 dimensions (2-bit), Orthogonality and Information Bottleneck Regularizations boost the nDCG@10 score from 0.4050 to 0.4087 before Adaptive Variance Control is even added, illustrating how newly added dimensions learn orthogonal (less redundant) features while penalizing unhelpful information in higher dimensions.
+
+\textbf{Adaptive Variance Control (AVC)} then provides an additional and sometimes substantial performance jump by preventing degenerate embedding distributions and refining the variance structure: 
+in Table~\ref{tab:mb_ablation_192} (MB at 192 dimensions, 2-bit), AVC lifts the nDCG@10 from 0.4087 to 0.4327, closing much of the gap to full-precision performance. 
+Likewise, for MiniLM at 96 dimensions (Table~\ref{tab:minilm_ablation_96}), cumulative additions of Matryoshka Loss and other regularizations yield 0.3590 at 2-bit—a marked improvement over 0.2428 (\textit{Thresholds Only})—and further rise to 0.3712 with AVC. 
+These incremental gains underscore the synergy among Matryoshka Loss, Orthogonality, Information Bottleneck, and AVC in enabling robust performance, even under aggressive compression settings.
+
+\textbf{Trainable FFN Transform:}
+Another integral component of our framework is the Trainable FFN Transform, which serves as the foundation for both quantization and Matryoshka training. 
+As seen in Table~\ref{tab:minilm_ablation_96}, adding the FFN Transform right after \textit{Thresholds Only} substantially boosts nDCG@10 from 0.2428 to 0.2860 at 2-bit, a relative improvement of about 17.8\%. 
+Similarly, at 1.5-bit quantization, performance jumps from 0.2330 to 0.2570. 
+This learnable transformation effectively redistributes and enhances features, making them more resilient to the subsequent discrete binning process. 
+It not only enables the model to better align embeddings with quantization thresholds but also helps ensure that critical semantic information is captured in earlier dimensions for Matryoshka representation. 
+In effect, the FFN Transform acts as a “pre-processor,” guiding the embedding space toward more quantization- and nesting-friendly configurations.
+
+\textbf{Quantization Loss:}
+Alongside these components, we employ a dedicated Quantization Loss that penalizes embedding values found near threshold boundaries, thereby reducing ambiguity in the quantization process. 
+For example, in Table~\ref{tab:minilm_ablation_96} at 2-bit, moving from \textit{+ Trainable FFN Transform} (nDCG@10 = 0.2860) to \textit{+ Quantization Loss} (0.3304) constitutes an absolute improvement of 4.4 points, over 15\% relative gain. 
+This loss term, which can take the form of a distance-based penalty around each threshold, ensures that embeddings “snap” more cleanly into discrete levels. 
+Without this loss, embeddings may cluster too close to threshold boundaries, leading to higher quantization errors once discretized. 
+Quantization Loss thus reduces confusion between adjacent bins and is pivotal for achieving high performance under low-bit or hybrid quantization settings.
+
