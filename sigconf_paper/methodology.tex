@@ -10,12 +10,12 @@ Our approach combines multiple techniques to create efficient and compact embedd
     \item Efficient bit-packing and similarity computation
 \end{itemize}
 
-\begin{figure}[h]
+\begin{figure*}[h]
     \centering
-    %\includegraphics[width=\linewidth]{figures/system_architecture.pdf}
-    \caption{Overall architecture of Tiny Embeddings system showing the transformation, quantization, and bit-packing stages.}
+    \includegraphics[width=\textwidth]{main-diagram.pdf}
+    \caption{Overall architecture of QAMA system showing the transformation, quantization, and bit-packing stages.}
     \label{fig:system_architecture}
-\end{figure}
+\end{figure*}
 
 
 \subsection{Quantization Framework}
@@ -48,11 +48,6 @@ Our framework achieves end-to-end trainability by optimizing continuous-valued e
 The thresholds themselves are updated using statistics from the continuous embeddings, ensuring the quantization boundaries evolve to match the learned representation space, while the transformation network learns to produce embeddings that naturally align with discrete quantization levels, enabling training without direct gradients through the discretization step.
 % This framework offers several advantages: optimal organization of embedding dimensions through learned transformations, balanced quantization bins via adaptive thresholds, flexible storage-performance trade-offs through multiple quantization levels, and end-to-end trainability. 
 Experimental results (Section~\ref{sec:experiments}) demonstrate significant compression while maintaining high retrieval accuracy across diverse tasks.
-
-
-
-
-
 
 
 \subsection{Promoting Information High Density in Early Dimensions}

@@ -1,3 +1,177 @@
+\section{Introduction}  
+  
+In the era of big data and large-scale machine learning applications, efficient representation of textual information is crucial. Embeddings serve as foundational elements in natural language processing (NLP) and information retrieval (IR), transforming text into high-dimensional vectors that capture semantic and syntactic nuances. While high-dimensional embeddings provide rich representations, they come with substantial storage costs and computational overhead, particularly in environments with limited resources or when deploying models to edge devices.  
+  
+Reducing the size of embeddings without sacrificing performance has become an important research area. Traditional methods such as dimensionality reduction and quantization have been employed, but often at the expense of degrading the quality of embeddings or losing critical information. Optimizing embeddings to be both compact and efficient while retaining high performance remains a significant challenge.  
+  
+In this paper, we present \textbf{Quantization Aware Matryoshka Adaptation (QAMA)}, an innovative approach that addresses the challenges of storage and retrieval efficiency. 
+Our method leverages \textit{Matryoshka Representation Learning}, named after the Russian nesting dolls, where embeddings of smaller dimensions are nested within larger ones. By adding additional feedforward neural network (FFN) layers and specialized loss functions to existing embedding models, we imbue them with the Matryoshka property. This ensures that essential information is concentrated in the early dimensions, allowing for the use of lower-dimensional embeddings without significant performance degradation.  
+  
+The \textbf{Matryoshka property} refers to the hierarchical nesting of embeddings, analogous to Russian nesting dolls, where embeddings of smaller dimensions are subsets of larger ones. This property allows for dynamic selection of embedding dimensions based on resource constraints or performance requirements without retraining the model. By concentrating more information in the early dimensions, we enable the use of lower-dimensional embeddings that still capture essential semantic content.  
+
+Furthermore, we introduce trainable quantization techniques, applying 0.5-bit, 1-bit, 1.5-bit, and 2-bit quantization levels to the embeddings. By reducing the numeric precision, we decrease storage requirements substantially. The quantization is made trainable through added FFN layers and loss functions that promote quantization during training.  
+  
+To enhance retrieval speed, especially on commodity hardware, we propose extending the use of Hamming distance and similarity to multi-bit quantized embeddings. By mapping multi-bit embeddings to higher-bit binary representations (e.g., converting 1.5-bit to 2-bit or 2-bit to 3-bit), we enable efficient computation of similarity using bitwise operations such as XOR, NOT, and POPCOUNT. These operations are highly optimized on modern CPUs, resulting in significantly faster retrieval compared to traditional floating-point calculations used in cosine similarity.  
+  
+Our hybrid architecture assigns higher precision quantization (e.g., 2-bit) to the early embedding dimensions, which contain more critical information, and lower precision quantization (e.g., 1-bit or 0.5-bit) to later dimensions with less information content. This alignment ensures an optimal balance between storage efficiency and representation quality.  
+  
+An important insight from our work is that simply selecting embedding dimensions based on variance or gradient importance did not yield satisfactory results. This observation led us to employ Matryoshka representation learning, which effectively concentrates information in early dimensions and overcomes the limitations of naive dimension selection methods.  
+  
+Our contributions can be summarized as follows:  
+  
+\begin{enumerate}  
+    \item \textbf{Integration of Matryoshka Representation Learning}: We enhance existing embedding models by adding FFN layers and specialized loss functions to enforce the Matryoshka property, empirically demonstrating that addtional FFN layers can learn this property with light weight training without requiring pre-training of full models for this property. This allows the use of fewer embedding dimensions without significant performance loss.
+  
+    \item \textbf{Trainable Quantization with Multiple Bit Levels}: We introduce trainable quantization techniques using 0.5-bit, 1-bit, 1.5-bit, and 2-bit quantization levels through additional FFN layers and quantization-promoting loss functions, reducing storage requirements by decreasing numeric precision.  
+  
+    \item \textbf{Novel Quantization Levels}: We explore the application of \textbf{0.5-bit, 1-bit, 1.5-bit, and 2-bit quantization}. By reducing the bits used per dimension, we significantly decrease the storage requirements of the embeddings while controlling the trade-off between compression and performance.  
+  
+    \item \textbf{Hybrid Quantization Architecture}: We propose a hybrid architecture that applies different quantization levels to different segments of the embedding dimensions, allocating higher precision to dimensions with more information content. Specifically, we use 2-bit quantization for the early \( K \) dimensions, 1.5-bit for the next \( L \) dimensions, 1-bit for the subsequent \( M \) dimensions, and 0.5-bit for the remaining dimensions. This design ensures that dimensions with higher information content receive finer-grained representation, aligning storage precision with the importance of the information captured.
+  
+    \item \textbf{Efficient Similarity Computation Using Bitwise Operations}: We propose using Hamming distance and Hamming similarity on the bitwise representations of embeddings. For 1.5-bit and 2-bit quantization levels, we map embeddings to higher-bit binary representations (e.g., converting 1.5-bit to 2-bit and 2-bit to 3-bit) to facilitate efficient computation using bitwise operations such as XOR, NOT, and POPCOUNT. This approach improves retrieval speed by leveraging CPU instructions optimized for such operations.  
+  
+    % \item \textbf{Overcoming Limitations of Dimension Selection/Pruning Methods}: We demonstrate that conventional methods of selecting important embedding dimensions are ineffective, and that Matryoshka learning effectively concentrates information in early dimensions. By integrating Matryoshka learning with embedding quantization, we are able to reduce both the number of embedding dimensions and their precision, leading to compact representations without substantial loss of similarity information.  
+  
+\end{enumerate}  
+Simply selecting embedding dimensions based on variance or gradient importance did not yield satisfactory results. This observation underscores the effectiveness of our Matryoshka learning approach, which inherently prioritizes information content in the early dimensions.  
+Our experimental evaluations on benchmark datasets demonstrate that Tiny Embeddings achieve significant reductions in storage requirements and retrieval times while maintaining competitive accuracy compared to uncompressed models. The proposed methods offer practical solutions for deploying efficient embeddings in large-scale IR systems and resource-constrained environments.  
+  
+The remainder of this paper is organized as follows: Section~\ref{sec:related_work} reviews related work on embedding compression and quantization. Section~\ref{sec:methodology} details our proposed methods, including the mathematical formulations of Matryoshka learning and quantization techniques. Section~\ref{sec:experiments} presents the experimental setup and results. Finally, Section~\ref{sec:conclusion} concludes the paper and discusses future research directions.  
+
+
+\section{Introduction}
+
+In the era of large language models and information retrieval systems, embeddings serve as foundational building blocks - transforming text into high-dimensional vectors that capture semantic relationships. From early approaches like Word2Vec~\cite{mikolov2013distributed} and GloVe~\cite{pennington2014glove} to modern transformers like BERT~\cite{devlin2019bert} and RoBERTa~\cite{liu2019roberta}, these embeddings have enabled remarkable advances in natural language processing. However, they come with substantial computational and storage costs that pose deployment challenges, particularly for resource-constrained environments or large-scale retrieval systems. A typical production system with millions of documents might require several gigabytes just to store the embeddings, while computing similarities between vectors demands significant computational resources - often becoming a bottleneck in real-time applications.
+
+Traditional approaches to reduce embedding size, such as post-training quantization~\cite{jacob2018quantization} or dimension pruning~\cite{li2016pruning}, often lead to significant degradation in retrieval quality. For instance, naively reducing embedding precision from 32-bit float to 8-bit integers can degrade ranking accuracy by 15-20\%, while arbitrarily truncating dimensions based on variance or importance scores yields even poorer results. Knowledge distillation~\cite{hinton2015distilling} and parameter-efficient methods~\cite{houlsby2019parameter} offer partial solutions but often struggle to maintain performance under aggressive compression. The fundamental challenge lies in maintaining semantic fidelity while drastically reducing both storage requirements and similarity computation costs.
+
+In this paper, we present \textbf{Quantization Aware Matryoshka Adaptation (QAMA)}, a unified framework that achieves extreme compression ratios while preserving retrieval accuracy through three key innovations:
+
+\begin{enumerate}
+    \item \textbf{Hierarchical Information Organization:} By augmenting existing models with lightweight feedforward layers and specialized loss functions (Matryoshka Loss, Orthogonality, Information Bottleneck), we concentrate essential semantic information in early dimensions. This enables graceful degradation when using fewer dimensions - for instance, Modern BERT retains 97.3\% of full-precision performance at 384 dimensions and still maintains 96\% at just 192 dimensions under 2-bit quantization.
+    
+    \item \textbf{Multi-Level Trainable Quantization:} We introduce an end-to-end training approach for ultra-low bit quantization (0.5-bit to 2-bit per dimension) that learns optimal quantization thresholds while keeping embeddings quantization-friendly. Our 2-bit quantization consistently recovers 95-98\% of full-precision accuracy while reducing storage requirements by over 90\%. Unlike previous quantization methods~\cite{shen2018nash, shu2018compressing}, our approach maintains fine-grained similarity distinctions even at extremely low bit widths.
+    
+    \item \textbf{Hybrid Precision Architecture:} Rather than applying uniform quantization, we allocate bits based on information content - using 2-bit quantization for critical early dimensions while progressively reducing precision (1.5-bit, 1-bit, 0.5-bit) for later dimensions. This novel hybrid approach achieves 94.9\% storage savings while maintaining 95.07\% of baseline accuracy, significantly outperforming traditional compression techniques~\cite{jaderberg2014speeding, sainath2013low}.
+\end{enumerate}
+
+A key insight from our work is that simply selecting dimensions based on statistical measures (variance, gradients) proves ineffective. Instead, we employ specialized loss functions that actively shape the embedding space during training. The Matryoshka Loss ensures information hierarchy, while Orthogonality and Information Bottleneck regularizations prevent redundancy and encourage compact representations. This is further enhanced by Adaptive Variance Control which prevents degenerate embeddings.
+
+Our extensive experiments demonstrate QAMA's effectiveness across multiple models and scenarios:
+
+\begin{itemize}
+    \item \textbf{Storage and Computation Efficiency:} For 768-dimensional vectors, we reduce storage from 3.07GB to just 156MB per million vectors using hybrid quantization - a 94.9\% reduction while maintaining 95.07\% accuracy. By enabling efficient bitwise operations (XOR + POPCOUNT) for similarity computation, we achieve 10-18\% faster retrieval compared to floating-point operations, with consistent speedups across modern CPU architectures through hardware-accelerated instructions.
+    
+    \item \textbf{Robust Accuracy Preservation:} Even under aggressive compression, QAMA maintains high accuracy - Modern BERT achieves nDCG@10 of 0.4593 at 384 dimensions with 2-bit quantization (vs 0.4695 for FP32), while MiniLM retains 97.9\% of full-precision performance even at 96 dimensions. This robustness stems from our integrated approach to quantization and dimensional reduction.
+    
+    \item \textbf{Component-wise Impact:} Through careful ablation studies, we demonstrate that each architectural component contributes meaningfully - removing Matryoshka Loss causes up to 46\% relative drop at lower dimensions, while Adaptive Variance Control provides 2-4\% final boost across configurations.
+\end{itemize}
+
+The practical implications extend beyond simple compression. QAMA enables flexible deployment strategies where systems can dynamically adjust dimension count based on resource availability or accuracy requirements without retraining. For resource-constrained deployments, 1.5-bit quantization with 192 dimensions offers 93.8\% storage savings while maintaining 89.73\% accuracy. For latency-sensitive applications, our hybrid approach provides an optimal balance with 94.9\% storage reduction, 95.07\% accuracy, and significantly faster similarity computations through bitwise operations.
+
+The remainder of this paper is organized as follows: Section~\ref{sec:related_work} reviews related work in embedding compression, quantization techniques, and Matryoshka representation learning. Section~\ref{sec:methodology} details our proposed methods, including the mathematical formulations of hierarchical learning and multi-level quantization. Section~\ref{sec:experiments} presents comprehensive experimental results across different models, tasks, and compression settings. Finally, Section~\ref{sec:conclusion} discusses broader implications and future research directions in efficient embedding systems.
+
+
+\section{Introduction}
+
+Large-scale language models and high-dimensional embeddings play a pivotal role in modern Information Retrieval (IR) and Natural Language Processing (NLP). While these embeddings effectively capture semantic and syntactic nuances, their large size imposes significant storage costs and slows down retrieval operations, especially when scaling to billions of documents or running on resource-constrained devices. Recent efforts to compress embeddings—by pruning, distillation, or conventional quantization—have shown promise but often incur notable drops in accuracy when pushing to extremely low precision or reduced dimensions.
+
+In this paper, we propose \textbf{Quantization Aware Matryoshka Adaptation (QAMA)}, which unifies hierarchical nesting of embeddings (“Matryoshka Representation Learning”) with multi-level quantization (0.5-bit, 1-bit, 1.5-bit, and 2-bit) and specialized bitwise retrieval. Our findings demonstrate that:
+
+\begin{itemize}
+    \item \textbf{Storage Reduction of Up to 95--97\%:} By quantizing embeddings to as low as 1--2 bits per dimension, we shrink typical 768-dimensional embeddings from multiple gigabytes to mere hundreds of megabytes for a million vectors. Even modestly aggressive settings (e.g., 2-bit quantization with 384 dimensions) can yield around \textbf{90\%} storage savings compared to full-precision (FP32) formats.
+    \item \textbf{Maintaining 95--98\% of Full-Precision Accuracy:} Despite the extreme compression, our method retains the majority of accuracy for multiple IR tasks. For instance, we observe up to \textbf{98\%} of the original ranking quality (as measured by nDCG@10) using Modern BERT at 2-bit quantization, and similarly strong results with MiniLM, even at lower dimensions (e.g., 192–96).
+    \item \textbf{Faster Retrieval via Bitwise Operations:} Beyond simply quantizing, we exploit bitwise similarity computation (XOR + POPCOUNT). This enables efficient Hamming distance calculations that, in practice, outperform dense floating-point dot products by reducing both FLOPs and real-world latency. 
+    \item \textbf{Hierarchical Matryoshka Adaptation of Embeddings:} We imbue embeddings with a Matryoshka property, ensuring smaller embeddings nest inside larger ones. Critically, this allows lower-dimensional slices to remain semantically meaningful. Our experiments show that, for MiniLM at just 96 dimensions and 2-bit quantization, performance remains surprisingly close (97--98\%) to the full-precision baseline.
+\end{itemize}
+
+While naive dimension selection methods (e.g., pruning dimensions based on variance) often degrade retrieval performance significantly, our \emph{Matryoshka loss} architecture systematically concentrates critical information in earlier dimensions without retraining the entire model. For example, key features are preserved in the first 192 dimensions of Modern BERT under 2-bit quantization, achieving nearly 96\% of the full-precision metric with only half the dimensions. Furthermore, by introducing specialized regularizations such as \emph{Orthogonality Regularization}, \emph{Information Bottleneck}, and \emph{Adaptive Variance Control}, we promote robust performance across various quantization levels and embedding dimensionalities.
+
+In this work, we make the following contributions:
+\begin{enumerate}
+    \item \textbf{Matryoshka Representation Learning with Training-Efficient FFNs:} We add lightweight feedforward layers, along with novel loss functions, to enforce nested embeddings. This enables dynamic dimension selection while preserving key semantic information.
+    \item \textbf{Multi-Level, Trainable Quantization:} We explore 0.5-bit, 1-bit, 1.5-bit, and 2-bit quantization, coupled with learnable thresholds to minimize quantization errors. The quantization process is trained end-to-end, ensuring stable discretization.
+    \item \textbf{Hybrid Architecture for Fine-Grained Control:} Assigning higher bit precision to early “information-dense” dimensions and lower bit precision to later dimensions yields an optimal balance of storage, speed, and accuracy.
+    \item \textbf{Bitwise Similarity Computations:} Our approach capitalizes on hardware-accelerated POPCOUNT operations, outperforming floating-point dot products in large-scale IR scenarios.
+\end{enumerate}
+
+Through extensive evaluations on Modern BERT (MB) and MiniLM under multiple IR tasks, we empirically show that QAMA significantly reduces memory consumption (\(>90\%\) in many cases) while retaining 95--98\% of full-precision retrieval accuracy and offering speedups in real-world retrieval benchmarks. Hence, QAMA provides a powerful, practical, and scalable solution for deploying large-scale embeddings under stringent memory and latency constraints.
+
+The remainder of this paper is organized as follows: Section~\ref{sec:related_work} surveys the literature on low-bit quantization, embedding compression, and Matryoshka-style representation learning. Section~\ref{sec:methodology} formalizes our hierarchical quantization framework, loss functions, and training procedure. Section~\ref{sec:experiments} details the experimental design, datasets, and baseline comparisons, while Section~\ref{sec:results} reports the full results and detailed analysis. Finally, Section~\ref{sec:conclusion} concludes with discussion and future directions.
+
+
+
+\section{Introduction}
+
+In the era of large language models and information retrieval systems, embeddings serve as foundational building blocks - transforming text into high-dimensional vectors that capture semantic relationships. While these embeddings enable powerful capabilities, they come with substantial computational and storage costs that pose deployment challenges, particularly for resource-constrained environments or large-scale retrieval systems. A typical production system with millions of documents might require several gigabytes just to store the embeddings, while computing similarities between vectors demands significant computational resources.
+
+Traditional approaches to reduce embedding size, such as post-training quantization or dimension pruning, often lead to significant degradation in retrieval quality. For instance, naively reducing embedding precision from 32-bit float to 8-bit integers can degrade ranking accuracy by 15-20\%, while arbitrarily truncating dimensions based on variance or importance scores yields even poorer results. The challenge lies in maintaining semantic fidelity while drastically reducing storage and computational requirements.
+
+In this paper, we present \textbf{Quantization Aware Matryoshka Adaptation (QAMA)}, a unified framework that achieves extreme compression ratios while preserving retrieval accuracy through three key innovations:
+
+\begin{enumerate}
+    \item \textbf{Hierarchical Information Organization:} By augmenting existing models with lightweight feedforward layers and specialized loss functions (Matryoshka Loss, Orthogonality, Information Bottleneck), we concentrate essential semantic information in early dimensions. This enables graceful degradation when using fewer dimensions - for instance, Modern BERT retains 97.3\% of full-precision performance at 384 dimensions and still maintains 96\% at just 192 dimensions under 2-bit quantization.
+    
+    \item \textbf{Multi-Level Trainable Quantization:} We introduce an end-to-end training approach for ultra-low bit quantization (0.5-bit to 2-bit per dimension) that learns optimal quantization thresholds while keeping embeddings quantization-friendly. Our 2-bit quantization consistently recovers 95-98\% of full-precision accuracy while reducing storage requirements by over 90\%.
+    
+    \item \textbf{Hybrid Precision Architecture:} Rather than applying uniform quantization, we allocate bits based on information content - using 2-bit quantization for critical early dimensions while progressively reducing precision (1.5-bit, 1-bit, 0.5-bit) for later dimensions. This hybrid approach achieves 94.9\% storage savings while maintaining 95.07\% of baseline accuracy.
+\end{enumerate}
+
+A key insight from our work is that simply selecting dimensions based on statistical measures (variance, gradients) proves ineffective. Instead, we employ specialized loss functions that actively shape the embedding space during training. The Matryoshka Loss ensures information hierarchy, while Orthogonality and Information Bottleneck regularizations prevent redundancy and encourage compact representations. This is further enhanced by Adaptive Variance Control which prevents degenerate embeddings.
+
+Our extensive experiments demonstrate QAMA's effectiveness across multiple models and scenarios:
+
+\begin{itemize}
+    \item \textbf{Storage Efficiency:} For 768-dimensional vectors, we reduce storage from 3.07GB to just 156MB per million vectors using hybrid quantization - a 94.9\% reduction while maintaining 95.07\% accuracy.
+    
+    \item \textbf{Retrieval Speed:} By enabling efficient bitwise operations (XOR + POPCOUNT) for similarity computation, we achieve 10-18\% faster retrieval compared to floating-point operations, with wall-clock measurements showing consistent speedups across different CPU architectures.
+    
+    \item \textbf{Accuracy Preservation:} Even under aggressive compression, QAMA maintains high accuracy - Modern BERT achieves nDCG@10 of 0.4593 at 384 dimensions with 2-bit quantization (vs 0.4695 for FP32), while MiniLM retains 97.9\% of full-precision performance even at 96 dimensions.
+    
+    \item \textbf{Ablation Insights:} Each component contributes meaningfully - removing Matryoshka Loss causes up to 46\% relative drop at lower dimensions, while Adaptive Variance Control provides 2-4\% final boost across configurations.
+\end{itemize}
+
+The practical implications are significant. For resource-constrained deployments, 1.5-bit quantization with 192 dimensions offers 93.8\% storage savings while maintaining 89.73\% accuracy. For latency-sensitive applications, our hybrid approach provides an optimal balance with 94.9\% storage reduction, 95.07\% accuracy, and only 0.87× the baseline computation time. When accuracy is paramount, 2-bit quantization at full dimensionality achieves 96.35\% accuracy with 90.6\% storage savings.
+
+Beyond the immediate benefits of compression, QAMA's hierarchical nature enables flexible deployment strategies - systems can dynamically adjust dimension count based on resource availability or accuracy requirements without retraining. This adaptability, combined with the dramatic reduction in storage and computation costs, makes QAMA particularly valuable for large-scale production systems where embedding storage and retrieval speed are often bottlenecks.
+
+The remainder of this paper is organized as follows: Section~\ref{sec:related_work} reviews related work in embedding compression and quantization. Section~\ref{sec:methodology} details our proposed methods, including the mathematical formulations of Matryoshka learning and quantization techniques. Section~\ref{sec:experiments} presents our experimental setup and results. Finally, Section~\ref{sec:conclusion} discusses implications and future directions.
+
+
+\section{Introduction}
+
+In the era of large language models and information retrieval systems, embeddings serve as foundational building blocks - transforming text into high-dimensional vectors that capture semantic relationships. From early approaches like Word2Vec~\cite{mikolov2013distributed} and GloVe~\cite{pennington2014glove} to modern transformers like BERT~\cite{devlin2019bert} and RoBERTa~\cite{liu2019roberta}, these embeddings have enabled remarkable advances in natural language processing. However, they come with substantial computational and storage costs that pose deployment challenges, particularly for resource-constrained environments or large-scale retrieval systems. A typical production system with millions of documents might require several gigabytes just to store the embeddings, while computing similarities between vectors demands significant computational resources - often becoming a bottleneck in real-time applications.
+
+Traditional approaches to reduce embedding size, such as post-training quantization~\cite{jacob2018quantization} or dimension pruning~\cite{li2016pruning}, often lead to significant degradation in retrieval quality. For instance, naively reducing embedding precision from 32-bit float to 8-bit integers can degrade ranking accuracy by 15-20\%, while arbitrarily truncating dimensions based on variance or importance scores yields even poorer results. Knowledge distillation~\cite{hinton2015distilling} and parameter-efficient methods~\cite{houlsby2019parameter} offer partial solutions but often struggle to maintain performance under aggressive compression. The fundamental challenge lies in maintaining semantic fidelity while drastically reducing both storage requirements and similarity computation costs.
+
+In this paper, we present \textbf{Quantization Aware Matryoshka Adaptation (QAMA)}, a unified framework that achieves extreme compression ratios while preserving retrieval accuracy through three key innovations:
+
+\begin{enumerate}
+    \item \textbf{Hierarchical Information Organization:} By augmenting existing models with lightweight feedforward layers and specialized loss functions (Matryoshka Loss, Orthogonality, Information Bottleneck), we concentrate essential semantic information in early dimensions. This enables graceful degradation when using fewer dimensions - for instance, Modern BERT retains 97.3\% of full-precision performance at 384 dimensions and still maintains 96\% at just 192 dimensions under 2-bit quantization.
+    
+    \item \textbf{Multi-Level Trainable Quantization:} We introduce an end-to-end training approach for ultra-low bit quantization (0.5-bit to 2-bit per dimension) that learns optimal quantization thresholds while keeping embeddings quantization-friendly. Our 2-bit quantization consistently recovers 95-98\% of full-precision accuracy while reducing storage requirements by over 90\%. Unlike previous quantization methods~\cite{shen2018nash, shu2018compressing}, our approach maintains fine-grained similarity distinctions even at extremely low bit widths.
+    
+    \item \textbf{Hybrid Precision Architecture:} Rather than applying uniform quantization, we allocate bits based on information content - using 2-bit quantization for critical early dimensions while progressively reducing precision (1.5-bit, 1-bit, 0.5-bit) for later dimensions. This novel hybrid approach achieves 94.9\% storage savings while maintaining 95.07\% of baseline accuracy, significantly outperforming traditional compression techniques~\cite{jaderberg2014speeding, sainath2013low}.
+\end{enumerate}
+
+A key insight from our work is that simply selecting dimensions based on statistical measures (variance, gradients) proves ineffective. Instead, we employ specialized loss functions that actively shape the embedding space during training. The Matryoshka Loss ensures information hierarchy, while Orthogonality and Information Bottleneck regularizations prevent redundancy and encourage compact representations. This is further enhanced by Adaptive Variance Control which prevents degenerate embeddings.
+
+Our extensive experiments demonstrate QAMA's effectiveness across multiple models and scenarios:
+
+\begin{itemize}
+    \item \textbf{Storage and Computation Efficiency:} For 768-dimensional vectors, we reduce storage from 3.07GB to just 156MB per million vectors using hybrid quantization - a 94.9\% reduction while maintaining 95.07\% accuracy. By enabling efficient bitwise operations (XOR + POPCOUNT) for similarity computation, we achieve 10-18\% faster retrieval compared to floating-point operations, with consistent speedups across modern CPU architectures through hardware-accelerated instructions.
+    
+    \item \textbf{Robust Accuracy Preservation:} Even under aggressive compression, QAMA maintains high accuracy - Modern BERT achieves nDCG@10 of 0.4593 at 384 dimensions with 2-bit quantization (vs 0.4695 for FP32), while MiniLM retains 97.9\% of full-precision performance even at 96 dimensions. This robustness stems from our integrated approach to quantization and dimensional reduction.
+    
+    \item \textbf{Component-wise Impact:} Through careful ablation studies, we demonstrate that each architectural component contributes meaningfully - removing Matryoshka Loss causes up to 46\% relative drop at lower dimensions, while Adaptive Variance Control provides 2-4\% final boost across configurations.
+\end{itemize}
+
+The practical implications extend beyond simple compression. QAMA enables flexible deployment strategies where systems can dynamically adjust dimension count based on resource availability or accuracy requirements without retraining. For resource-constrained deployments, 1.5-bit quantization with 192 dimensions offers 93.8\% storage savings while maintaining 89.73\% accuracy. For latency-sensitive applications, our hybrid approach provides an optimal balance with 94.9\% storage reduction, 95.07\% accuracy, and significantly faster similarity computations through bitwise operations.
+
+The remainder of this paper is organized as follows: Section~\ref{sec:related_work} reviews related work in embedding compression, quantization techniques, and Matryoshka representation learning. Section~\ref{sec:methodology} details our proposed methods, including the mathematical formulations of hierarchical learning and multi-level quantization. Section~\ref{sec:experiments} presents comprehensive experimental results across different models, tasks, and compression settings. Finally, Section~\ref{sec:conclusion} discusses broader implications and future research directions in efficient embedding systems.
+
+
+
 \subsection{Training and Evaluation}
 
 

@@ -1,31 +1,67 @@
 \section{Related Work}
 \label{sec:related_work}
 
-Large-scale language models and high-dimensional embeddings have greatly advanced Natural Language Processing (NLP) and Information Retrieval (IR). However, they often demand substantial storage and compute. Various compression techniques have thus emerged to reduce size while retaining performance. This section discusses embedding approaches in IR, combined strategies for compressing large language models (LLMs) and embeddings, and Matryoshka Representation Learning (MRL).
+Large-scale language models and high-dimensional embeddings have greatly advanced Natural Language Processing (NLP) and Information Retrieval (IR). 
+However, they often demand substantial storage and compute. Various compression techniques have thus emerged to reduce size while retaining performance. 
+This section discusses embedding approaches in IR, combined strategies for compressing large language models (LLMs) and embeddings, and Matryoshka Representation Learning (MRL).
 
 \subsection{Embedding Models in Information Retrieval}
-Early word embeddings like Word2Vec~\cite{mikolov2013distributed} and GloVe~\cite{pennington2014glove} paved the way for dense vector representations. Subsequent transformers, including BERT~\cite{devlin2019bert} and RoBERTa~\cite{liu2019roberta}, introduced contextual embeddings with higher accuracy but also higher memory and compute costs. Recent research prioritizes compact architectures for deployment efficiency.
+Early word embeddings like Word2Vec~\cite{mikolov2013distributed} and GloVe~\cite{pennington2014glove} paved the way for dense vector representations. Subsequent transformers, including BERT~\cite{devlin2019bert}, RoBERTa~\cite{liu2019roberta} and Sentence-BERT~\cite{reimers-2019-sentence-bert}, introduced contextual embeddings with higher accuracy but also higher memory and compute costs. 
+Recent research prioritizes compact architectures for deployment efficiency.
 
 \subsection{Compression Techniques for Language Models and Embeddings}
 \paragraph{Pruning and Distillation}
-\citet{han2015deep} proposed \emph{Deep Compression}, combining pruning, quantization, and coding. The \emph{Lottery Ticket Hypothesis}~\cite{frankle2019lottery} highlights subnetworks that can perform on par with their original dense models. Knowledge distillation~\cite{hinton2015distilling, sanh2019distilbert, jiao2020tinybert} transfers capability from large “teacher” models to smaller “student” models.
+\citet{han2015deep} proposed \emph{Deep Compression}, combining pruning, quantization, and coding. The \emph{Lottery Ticket Hypothesis}~\cite{frankle2019lottery} highlights subnetworks that can perform on par with their original dense models. 
+Knowledge distillation~\cite{hinton2015distilling, sanh2019distilbert, jiao2020tinybert} transfers capability from large “teacher” models to smaller “student” models.
+Recent approaches increasingly integrate compression awareness during training~\cite{shen2021efficient,wang-etal-2024-compression}. 
+Our work extends this line by introducing quantization and dimensional hierarchy constraints during the learning phase.
 
-\paragraph{Parameter-Efficient Training and Factorization}
-Adapters~\cite{houlsby2019parameter}, Prefix Tuning~\cite{li2021prefix}, and other techniques train only a fraction of parameters. Low-rank factorization~\cite{jaderberg2014speeding, sainath2013low} further trims storage and compute.
 
 \paragraph{Quantization}
-Both post-training~\cite{jacob2018quantization} and quantization-aware training~\cite{hubara2017quantized,mishra2018apprentice} constrain numerical precision. Binary and ternary embeddings~\cite{shen2018nash, shu2018compressing} operate efficiently via bitwise operations. Product Quantization~\cite{jegou2010product} partitions embeddings into sub-vectors for approximate nearest neighbor search.
+Both post-training~\cite{jacob2018quantization} and quantization-aware training~\cite{hubara2017quantized,mishra2018apprentice} constrain numerical precision. LLM.int8()~\cite{dettmers2022llm} and BitNet~\cite{wang2023bitnet} demonstrate successful quantization for large language models.
+Binary and ternary embeddings~\cite{shen2018nash, shu2018compressing} operate efficiently via bitwise operations. 
+Product Quantization~\cite{jegou2010product} partitions embeddings into sub-vectors for approximate nearest neighbor search.
+Mixed-precision approaches~\cite{dong2019hawq,wang2019haq} allocate different bit-widths based on layer sensitivity. 
+In contrast, we propose dimension-wise precision allocation guided by information content
 
 \paragraph{Dimensionality Reduction and Pruning for Embeddings}
-Methods like PCA~\cite{jolliffe2016principal}, SVD~\cite{golub1971singular}, and autoencoders~\cite{hinton2006reducing} systematically compress embeddings, while t-SNE and UMAP focus primarily on visualization by preserving local neighborhoods at the expense of global structure and are unsuitable for information retrieval tasks due to their non-parametric nature and inability to process new data without recomputation. 
+Methods like PCA~\cite{jolliffe2016principal}, SVD~\cite{golub1971singular}, and autoencoders~\cite{hinton2006reducing} systematically compress embeddings, while t-SNE~\cite{maaten2008visualizing} and UMAP~\cite{mcinnes2018umap} focus primarily on visualization by preserving local neighborhoods at the expense of global structure and are unsuitable for information retrieval tasks due to their non-parametric nature and inability to process new data without recomputation.
 In contrast, our approach creates hierarchical, nested embeddings through explicit loss functions that concentrate essential semantic information in early dimensions while maintaining cross-scale consistency, enabling dynamic dimension selection without retraining and preserving both local and global relationships crucial for retrieval tasks. 
 Pruning low-variance dimensions~\cite{li2016pruning} can yield more compact models with minimal loss in semantic fidelity, but lacks the systematic information organization and quantization awareness of our approach.
 
 \paragraph{Efficient Similarity Computation}
-In large-scale IR, hashed or binarized representations expedite retrieval via Hamming distance (XOR, POPCOUNT)~\cite{wang2017survey}, or via Locality-Sensitive Hashing (LSH)~\cite{andoni2006near} to approximate nearest neighbors.
+Recent advances in approximate nearest neighbor search have leveraged binary codes~\cite{wang2017survey} and locality-sensitive hashing~\cite{andoni2006near, andoni2014beyond}. 
+Our work contributes novel bit-level expansions (e.g., 2-bit to 3-bit mapping) that preserve fine-grained similarities while enabling efficient XOR and POPCOUNT operations. 
+This bridges the gap between ultra-low-bit quantization and accurate similarity preservation.
 
 \subsection{Matryoshka Representation Learning}
-Matryoshka Representation Learning (MRL)~\cite{kusupati2021matryoshka} aims to create hierarchical embeddings where smaller embeddings are nested within larger ones, analogous to Russian nesting dolls. This approach allows models to adaptively use embeddings of different sizes based on resource constraints, without the need for retraining. MRL focuses on generating these hierarchical embeddings such that truncated dimensions can still yield functional representations. While prior works have attempted to promote such nesting properties, they typically did so without explicit loss functions tailored to enforce them.
+Matryoshka Representation Learning (MRL)~\cite{kusupati2021matryoshka} aims to create hierarchical embeddings where smaller embeddings are nested within larger ones, analogous to Russian nesting dolls. 
+This approach allows models to adaptively use embeddings of different sizes based on resource constraints, without the need for retraining. 
+MRL focuses on generating these hierarchical embeddings such that truncated dimensions can still yield functional representations. 
+While prior works have attempted to promote such nesting properties, they typically did so without explicit loss functions tailored to enforce them.
+We incorporate three explicit \emph{Losses to Promote Matryoshka Property} to concentrate key information in early dimensions. 
 
 \subsection{Our Approach in Context}
-We unify MRL with finer-grained quantization (e.g., 0.5-bit, 1.5-bit) and bitwise operations for efficient storage and retrieval. Unlike previous MRL methods, we incorporate three explicit \emph{Losses to Promote Matryoshka Property} to concentrate key information in early dimensions. We also use a hybrid quantization scheme assigning varying bit-levels to embedding slices, balancing performance and storage for diverse IR scenarios.
+% We unify MRL with finer-grained quantization and bitwise operations for efficient storage and retrieval. 
+% Unlike previous MRL methods, we incorporate three explicit \emph{Losses to Promote Matryoshka Property} to concentrate key information in early dimensions. 
+% We also use a hybrid quantization scheme assigning varying bit-levels to embedding slices, balancing performance and storage for diverse IR scenarios.
+
+% Our framework QAMA unifies these directions, introducing three key innovations: (1) quantization-aware Matryoshka learning, (2) hybrid precision allocation, and (3) efficient bit-wise similarity computation. The following section details our technical approach.
+
+
+
+While these prior approaches have made significant advances in embedding compression and efficient retrieval, they typically address individual aspects of the problem in isolation. 
+Post-training quantization methods~\cite{jacob2018quantization} often struggle with accuracy degradation, while MRL~\cite{kusupati2021matryoshka} lacks explicit mechanisms for ultra-low-bit representations. 
+Similarly, current mixed-precision techniques~\cite{dong2019hawq} focus on layer-wise quantization rather than dimension-wise precision allocation that aligns with semantic importance. More recent approaches within Hugging Face, Jina AI and Vespa AI \cite{hf2024quantization, vespa2024matryoshka, jina2024binary} have also focused on MRL and quantization, where \cite{vespa2024matryoshka} has proposed to integrate MRL with quantization, but their training process doesn't adapt older models and doesn't support hybrid precision allocation.
+
+Our framework QAMA unifies and extends these directions through three key innovations:
+\begin{enumerate}
+    \item \textbf{Quantization-aware Matryoshka Learning:} Unlike previous MRL approaches that focus solely on dimensional hierarchy, we jointly optimize for both nested structure and quantization-friendly representations through specialized loss functions and learned transformations.
+    
+    \item \textbf{Hybrid Precision Allocation:} We introduce a novel dimension-wise precision scheme that assigns different bit-widths (0.5-bit to 2-bit) based on information content, moving beyond traditional uniform or layer-wise quantization approaches to achieve better compression-accuracy trade-offs.
+    
+    \item \textbf{Efficient Bit-wise Similarity Computation:} We bridge the gap between ultra-low-bit quantization and accurate similarity preservation through carefully designed bit-level expansions, enabling fast retrieval via hardware-accelerated operations while maintaining fine-grained semantic distinctions.
+\end{enumerate}
+
+The following section details our technical approach, describing how these innovations work together to create a unified framework for compact, efficient, and accurate embedding systems.
+

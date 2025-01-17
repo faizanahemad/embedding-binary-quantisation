@@ -1,46 +1,4 @@
-%% This is file `sample-manuscript.tex',
-%% generated with the docstrip utility.
-%%
-%% The original source files were:
-%%
-%% samples.dtx  (with options: `manuscript')
-%% 
-%% IMPORTANT NOTICE:
-%% 
-%% For the copyright see the source file.
-%% 
-%% Any modified versions of this file must be renamed
-%% with new filenames distinct from sample-manuscript.tex.
-%% 
-%% For distribution of the original source see the terms
-%% for copying and modification in the file samples.dtx.
-%% 
-%% This generated file may be distributed as long as the
-%% original source files, as listed above, are part of the
-%% same distribution. (The sources need not necessarily be
-%% in the same archive or directory.)
-%%
-%% Commands for TeXCount
-%TC:macro \cite [option:text,text]
-%TC:macro \citep [option:text,text]
-%TC:macro \citet [option:text,text]
-%TC:envir table 0 1
-%TC:envir table* 0 1
-%TC:envir tabular [ignore] word
-%TC:envir displaymath 0 word
-%TC:envir math 0 word
-%TC:envir comment 0 0
-%%
-%%
-%% The first command in your LaTeX source must be the \documentclass command.
-%%%% Small single column format, used for CIE, CSUR, DTRAP, JACM, JDIQ, JEA, JERIC, JETC, PACMCGIT, TAAS, TACCESS, TACO, TALG, TALLIP (formerly TALIP), TCPS, TDSCI, TEAC, TECS, TELO, THRI, TIIS, TIOT, TISSEC, TIST, TKDD, TMIS, TOCE, TOCHI, TOCL, TOCS, TOCT, TODAES, TODS, TOIS, TOIT, TOMACS, TOMM (formerly TOMCCAP), TOMPECS, TOMS, TOPC, TOPLAS, TOPS, TOS, TOSEM, TOSN, TQC, TRETS, TSAS, TSC, TSLP, TWEB.
-% \documentclass[acmsmall]{acmart}
-
-%%%% Large single column format, used for IMWUT, JOCCH, PACMPL, POMACS, TAP, PACMHCI
-% \documentclass[acmlarge,screen]{acmart}
-
-%%%% Large double column format, used for TOG
-\documentclass[acmtog, authorversion]{acmart}
+\documentclass[sigconf,natbib=true,anonymous=true]{acmart}
 
 %%%% Generic manuscript mode, required for submission
 %%%% and peer review
@@ -59,20 +17,20 @@
 %% the commands and values with those provided to you when you
 %% complete the rights form.
 \setcopyright{acmcopyright}
-\copyrightyear{2018}
-\acmYear{2018}
+\copyrightyear{2025}
+\acmYear{2025}
 \acmDOI{XXXXXXX.XXXXXXX}
 
 %% These commands are for a PROCEEDINGS abstract or paper.
 \acmConference[Conference acronym 'XX]{Make sure to enter the correct
   conference title from your rights confirmation emai}{June 03--05,
-  2018}{Woodstock, NY}
+  2025}{Woodstock, NY}
 %
 %  Uncomment \acmBooktitle if th title of the proceedings is different
 %  from ``Proceedings of ...''!
 %
-\acmBooktitle{Woodstock '18: ACM Symposium on Neural Gaze Detection,
- June 03--05, 2018, Woodstock, NY} 
+\acmBooktitle{Woodstock '25: ACM Symposium on Neural Gaze Detection,
+ June 03--05, 2025, Woodstock, NY} 
 \acmPrice{15.00}
 \acmISBN{978-1-4503-XXXX-X/18/06}
 
@@ -84,18 +42,6 @@
 %% of the event, and this ID should be used as the parameter to this command.
 %%\acmSubmissionID{123-A56-BU3}
 
-%%
-%% For managing citations, it is recommended to use bibliography
-%% files in BibTeX format.
-%%
-%% You can then either use BibTeX with the ACM-Reference-Format style,
-%% or BibLaTeX with the acmnumeric or acmauthoryear sytles, that include
-%% support for advanced citation of software artefact from the
-%% biblatex-software package, also separately available on CTAN.
-%%
-%% Look at the sample-*-biblatex.tex files for templates showcasing
-%% the biblatex styles.
-%%
 
 %%
 %% The majority of ACM publications use numbered citations and
@@ -121,15 +67,12 @@
 \usepackage{amssymb}    % For mathematical symbols
 \usepackage{bbm}        % For \mathbbm
 \usepackage{graphicx}   % For \includegraphics
+\usepackage{totpages}
 
 % Add this in the preamble (after \usepackage declarations)
 \newcommand{\redtodo}[1]{\todo[inline, color=red]{\textbf{TODO:} #1}}
 
 \begin{document}
-
-%%
-%% The "title" command has an optional parameter,
-%% allowing the author to define a "short title" to be used in page headers.
 
 % \title[Tiny Embeddings]{Tiny Embeddings: Leveraging Matryoshka Learning, Quantization, and Bitwise Operations for Reduced Storage and Improved Retrieval Speed}
 
@@ -219,74 +162,14 @@
 %% the work being presented. Separate the keywords with commas.
 \keywords{datasets, neural networks, gaze detection, text tagging}
 
-%% A "teaser" image appears between the author and affiliation
-%% information and the body of the document, and typically spans the
-%% page.
-
-% \begin{teaserfigure}
-%   \includegraphics[width=\textwidth]{sampleteaser}
-%   \caption{Seattle Mariners at Spring Training, 2010.}
-%   \Description{Enjoying the baseball game from the third-base
-%   seats. Ichiro Suzuki preparing to bat.}
-%   \label{fig:teaser}
-% \end{teaserfigure}
-
-%%
-%% This command processes the author and affiliation and title
-%% information and builds the first part of the formatted document.
 \maketitle
-
-\section{Introduction}  
-  
-In the era of big data and large-scale machine learning applications, efficient representation of textual information is crucial. Embeddings serve as foundational elements in natural language processing (NLP) and information retrieval (IR), transforming text into high-dimensional vectors that capture semantic and syntactic nuances. While high-dimensional embeddings provide rich representations, they come with substantial storage costs and computational overhead, particularly in environments with limited resources or when deploying models to edge devices.  
-  
-Reducing the size of embeddings without sacrificing performance has become an important research area. Traditional methods such as dimensionality reduction and quantization have been employed, but often at the expense of degrading the quality of embeddings or losing critical information. Optimizing embeddings to be both compact and efficient while retaining high performance remains a significant challenge.  
-  
-In this paper, we present \textbf{Tiny Embeddings}, an innovative approach that addresses the challenges of storage and retrieval efficiency. Our method leverages \textit{Matryoshka Representation Learning}, named after the Russian nesting dolls, where embeddings of smaller dimensions are nested within larger ones. By adding additional feedforward neural network (FFN) layers and specialized loss functions to existing embedding models, we imbue them with the Matryoshka property. This ensures that essential information is concentrated in the early dimensions, allowing for the use of lower-dimensional embeddings without significant performance degradation.  
-  
-The \textbf{Matryoshka property} refers to the hierarchical nesting of embeddings, analogous to Russian nesting dolls, where embeddings of smaller dimensions are subsets of larger ones. This property allows for dynamic selection of embedding dimensions based on resource constraints or performance requirements without retraining the model. By concentrating more information in the early dimensions, we enable the use of lower-dimensional embeddings that still capture essential semantic content.  
-
-Furthermore, we introduce trainable quantization techniques, applying 0.5-bit, 1-bit, 1.5-bit, and 2-bit quantization levels to the embeddings. By reducing the numeric precision, we decrease storage requirements substantially. The quantization is made trainable through added FFN layers and loss functions that promote quantization during training.  
-  
-To enhance retrieval speed, especially on commodity hardware, we propose extending the use of Hamming distance and similarity to multi-bit quantized embeddings. By mapping multi-bit embeddings to higher-bit binary representations (e.g., converting 1.5-bit to 2-bit or 2-bit to 3-bit), we enable efficient computation of similarity using bitwise operations such as XOR, NOT, and POPCOUNT. These operations are highly optimized on modern CPUs, resulting in significantly faster retrieval compared to traditional floating-point calculations used in cosine similarity.  
-  
-Our hybrid architecture assigns higher precision quantization (e.g., 2-bit) to the early embedding dimensions, which contain more critical information, and lower precision quantization (e.g., 1-bit or 0.5-bit) to later dimensions with less information content. This alignment ensures an optimal balance between storage efficiency and representation quality.  
-  
-An important insight from our work is that simply selecting embedding dimensions based on variance or gradient importance did not yield satisfactory results. This observation led us to employ Matryoshka representation learning, which effectively concentrates information in early dimensions and overcomes the limitations of naive dimension selection methods.  
-  
-Our contributions can be summarized as follows:  
-  
-\begin{enumerate}  
-    \item \textbf{Integration of Matryoshka Representation Learning}: We enhance existing embedding models by adding FFN layers and specialized loss functions to enforce the Matryoshka property, empirically demonstrating that addtional FFN layers can learn this property with light weight training without requiring pre-training of full models for this property. This allows the use of fewer embedding dimensions without significant performance loss.
-  
-    \item \textbf{Trainable Quantization with Multiple Bit Levels}: We introduce trainable quantization techniques using 0.5-bit, 1-bit, 1.5-bit, and 2-bit quantization levels through additional FFN layers and quantization-promoting loss functions, reducing storage requirements by decreasing numeric precision.  
-  
-    \item \textbf{Novel Quantization Levels}: We explore the application of \textbf{0.5-bit, 1-bit, 1.5-bit, and 2-bit quantization}. By reducing the bits used per dimension, we significantly decrease the storage requirements of the embeddings while controlling the trade-off between compression and performance.  
-  
-    \item \textbf{Hybrid Quantization Architecture}: We propose a hybrid architecture that applies different quantization levels to different segments of the embedding dimensions, allocating higher precision to dimensions with more information content. Specifically, we use 2-bit quantization for the early \( K \) dimensions, 1.5-bit for the next \( L \) dimensions, 1-bit for the subsequent \( M \) dimensions, and 0.5-bit for the remaining dimensions. This design ensures that dimensions with higher information content receive finer-grained representation, aligning storage precision with the importance of the information captured.
-  
-    \item \textbf{Efficient Similarity Computation Using Bitwise Operations}: We propose using Hamming distance and Hamming similarity on the bitwise representations of embeddings. For 1.5-bit and 2-bit quantization levels, we map embeddings to higher-bit binary representations (e.g., converting 1.5-bit to 2-bit and 2-bit to 3-bit) to facilitate efficient computation using bitwise operations such as XOR, NOT, and POPCOUNT. This approach improves retrieval speed by leveraging CPU instructions optimized for such operations.  
-  
-    % \item \textbf{Overcoming Limitations of Dimension Selection/Pruning Methods}: We demonstrate that conventional methods of selecting important embedding dimensions are ineffective, and that Matryoshka learning effectively concentrates information in early dimensions. By integrating Matryoshka learning with embedding quantization, we are able to reduce both the number of embedding dimensions and their precision, leading to compact representations without substantial loss of similarity information.  
-  
-\end{enumerate}  
-simply selecting embedding dimensions based on variance or gradient importance did not yield satisfactory results. This observation underscores the effectiveness of our Matryoshka learning approach, which inherently prioritizes information content in the early dimensions.  
-Our experimental evaluations on benchmark datasets demonstrate that Tiny Embeddings achieve significant reductions in storage requirements and retrieval times while maintaining competitive accuracy compared to uncompressed models. The proposed methods offer practical solutions for deploying efficient embeddings in large-scale IR systems and resource-constrained environments.  
-  
-The remainder of this paper is organized as follows: Section~\ref{sec:related_work} reviews related work on embedding compression and quantization. Section~\ref{sec:methodology} details our proposed methods, including the mathematical formulations of Matryoshka learning and quantization techniques. Section~\ref{sec:experiments} presents the experimental setup and results. Finally, Section~\ref{sec:conclusion} concludes the paper and discusses future research directions.  
-  
-
-\include{related}  
-  
-\include{methodology}
-\include{experiments}
-\include{results}
-
-
-\section{Conclusion}  
-\label{sec:conclusion}  
-Summarize your contributions and the significance of your findings in advancing the field of information retrieval.  
-
+\let\clearpage\relax  % Disable automatic page breaks
+\input{intro}  
+\input{related}  
+\input{methodology}
+\input{experiments}
+\input{results}
+\input{conclusion}
 
 %%
 %% The next two lines define the bibliography style to be used, and
@@ -294,39 +177,6 @@ Summarize your contributions and the significance of your findings in advancing 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{sample-base}
 
-%%
-%% If your work has an appendix, this is the place to put it.
-\appendix
-
-\section{Research Methods}
-
-\subsection{Part One}
-
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi
-malesuada, quam in pulvinar varius, metus nunc fermentum urna, id
-sollicitudin purus odio sit amet enim. Aliquam ullamcorper eu ipsum
-vel mollis. Curabitur quis dictum nisl. Phasellus vel semper risus, et
-lacinia dolor. Integer ultricies commodo sem nec semper.
-
-\subsection{Part Two}
-
-Etiam commodo feugiat nisl pulvinar pellentesque. Etiam auctor sodales
-ligula, non varius nibh pulvinar semper. Suspendisse nec lectus non
-ipsum convallis congue hendrerit vitae sapien. Donec at laoreet
-eros. Vivamus non purus placerat, scelerisque diam eu, cursus
-ante. Etiam aliquam tortor auctor efficitur mattis.
-
-\section{Online Resources}
-
-Nam id fermentum dui. Suspendisse sagittis tortor a nulla mollis, in
-pulvinar ex pretium. Sed interdum orci quis metus euismod, et sagittis
-enim maximus. Vestibulum gravida massa ut felis suscipit
-congue. Quisque mattis elit a risus ultrices commodo venenatis eget
-dui. Etiam sagittis eleifend elementum.
-
-Nam interdum magna at lectus dignissim, ac dignissim lorem
-rhoncus. Maecenas eu arcu ac neque placerat aliquam. Nunc pulvinar
-massa et mattis lacinia.
 
 \end{document}
 \endinput

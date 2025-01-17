@@ -1,0 +1,35 @@
+\section{Introduction}
+
+In the era of large language models and information retrieval systems, embeddings serve as foundational building blocks - transforming text into high-dimensional vectors that capture semantic relationships. From early approaches like Word2Vec~\cite{mikolov2013distributed} and GloVe~\cite{pennington2014glove} to modern transformers like BERT~\cite{devlin2019bert} and RoBERTa~\cite{liu2019roberta}, these embeddings have enabled remarkable advances in natural language processing. However, they come with substantial computational and storage costs that pose deployment challenges, particularly for resource-constrained environments or large-scale retrieval systems.
+
+Traditional approaches to reduce embedding size, such as post-training quantization~\cite{jacob2018quantization} or dimension pruning~\cite{li2016pruning}, often lead to significant degradation in retrieval quality. 
+Knowledge distillation~\cite{hinton2015distilling} and parameter-efficient methods~\cite{houlsby2019parameter} offer partial solutions but struggle to maintain performance under aggressive compression. 
+Even advanced techniques like Product Quantization~\cite{jegou2010product} or binary embeddings~\cite{shen2018nash, tissier2019binarization, shu2018compressing} face challenges in preserving fine-grained semantic relationships. 
+The fundamental challenge lies in maintaining semantic fidelity while drastically reducing both storage requirements and similarity computation costs.
+
+Matryoshka Representation Learning (MRL) \cite{kusupati2021matryoshka}, inspired by Russian nesting dolls, offers a promising direction by creating hierarchical embeddings where smaller representations are nested within larger ones. Similar to how each Russian doll contains progressively smaller versions inside, MRL aims to concentrate essential semantic information in early dimensions, allowing for flexible dimension selection without retraining. However, existing MRL approaches lack explicit mechanisms to enforce this nesting property and often struggle when combined with aggressive compression techniques.
+
+In this paper, we present \textbf{Quantization Aware Matryoshka Adaptation (QAMA)}, a unified framework that addresses these challenges through three key innovations:
+
+\begin{enumerate}
+    \item \textbf{Hierarchical Information Organization:} We enhance existing models with lightweight feedforward layers and specialized loss functions (Matryoshka Loss, Orthogonality, Information Bottleneck) that actively concentrate essential semantic information in early dimensions. Unlike previous approaches that rely on statistical measures like variance or importance scores, our method shapes the embedding space during training to ensure effective dimensional reduction.
+    
+    \item \textbf{Trainable Multi-Level Quantization:} We introduce an end-to-end approach for ultra-low bit quantization (0.5-bit to 2-bit per dimension) that learns optimal quantization thresholds while keeping embeddings quantization-friendly. 
+    Unlike previous methods~\cite{shen2018nash, shu2018compressing}, our approach maintains fine-grained similarity distinctions even at extremely low bit widths through carefully designed codebook expansions and loss functions.
+    
+    \item \textbf{Hybrid Precision Architecture:} Rather than applying uniform quantization, we allocate bits based on information content - using higher precision for critical early dimensions while progressively reducing precision for later dimensions. 
+    This novel approach aligns storage precision with semantic importance, offering better compression-accuracy trade-offs than traditional approaches~\cite{jaderberg2014speeding, sainath2013low}.
+    
+    \item \textbf{Efficient Similarity Computation Using Bitwise Operations}: We propose using Hamming distance and Hamming similarity on the bitwise representations of embeddings. For 1.5-bit and 2-bit quantization levels, we map embeddings to higher-bit binary representations (e.g., converting 1.5-bit to 2-bit and 2-bit to 3-bit) to facilitate efficient computation using bitwise operations such as XOR, NOT, and POPCOUNT. 
+    This approach improves retrieval speed by leveraging CPU instructions optimized for such operations.  
+\end{enumerate}
+
+A key insight from our work is that simply selecting dimensions based on statistical measures proves ineffective. Instead, we employ specialized loss functions that actively shape the embedding space during training. The Matryoshka Loss ensures information hierarchy, while Orthogonality and Information Bottleneck regularizations prevent redundancy and encourage compact representations. This is further enhanced by Adaptive Variance Control which prevents degenerate embeddings.
+
+To enable efficient similarity search, we extend the use of \textbf{Hamming distance} to our multi-level quantized embeddings through careful bit-level expansions. 
+By mapping quantized vectors to optimized binary representations, we enable fast retrieval using hardware-accelerated bitwise operations (XOR, POPCOUNT). This approach significantly improves retrieval speed compared to traditional floating-point calculations, making our method particularly suitable for large-scale applications.
+
+Our extensive experiments demonstrate that QAMA achieves substantial storage reduction while maintaining competitive accuracy across different models and scenarios. For instance, our hybrid quantization approach reduces storage requirements by over 90\% while preserving more than 95\% of the original retrieval accuracy. The framework enables flexible deployment strategies where systems can dynamically adjust dimension count based on resource availability or accuracy requirements without retraining - a capability particularly valuable for resource-constrained or latency-sensitive applications.
+
+The remainder of this paper is organized as follows: Section~\ref{sec:related_work} reviews related work in embedding compression, quantization techniques, and Matryoshka representation learning. Section~\ref{sec:methodology} details our proposed methods, including the mathematical formulations of hierarchical learning and multi-level quantization. Section~\ref{sec:experiments} presents comprehensive experimental results across different models and tasks. 
+Finally, Section~\ref{sec:conclusion} discusses broader implications and future research directions in efficient embedding systems.
