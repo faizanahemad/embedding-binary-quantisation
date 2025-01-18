@@ -335,3 +335,550 @@ series = {NIPS '20}
     url = "http://arxiv.org/abs/1908.10084",
 }
 
+@inproceedings{mikolov2013distributed,
+ author = {Mikolov, Tomas and Sutskever, Ilya and Chen, Kai and Corrado, Greg S and Dean, Jeff},
+ booktitle = {Advances in Neural Information Processing Systems},
+ editor = {C.J. Burges and L. Bottou and M. Welling and Z. Ghahramani and K.Q. Weinberger},
+ pages = {},
+ publisher = {Curran Associates, Inc.},
+ title = {Distributed Representations of Words and Phrases and their Compositionality},
+ url = {https://proceedings.neurips.cc/paper_files/paper/2013/file/9aa42b31882ec039965f3c4923ce901b-Paper.pdf},
+ volume = {26},
+ year = {2013}
+}
+
+
+@inproceedings{pennington2014glove,
+    title = "{G}lo{V}e: Global Vectors for Word Representation",
+    author = "Pennington, Jeffrey  and
+      Socher, Richard  and
+      Manning, Christopher",
+    editor = "Moschitti, Alessandro  and
+      Pang, Bo  and
+      Daelemans, Walter",
+    booktitle = "Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing ({EMNLP})",
+    month = oct,
+    year = "2014",
+    address = "Doha, Qatar",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/D14-1162/",
+    doi = "10.3115/v1/D14-1162",
+    pages = "1532--1543"
+}
+
+@inproceedings{reimers-2019-sentence-bert,
+    title = "Sentence-{BERT}: Sentence Embeddings using {S}iamese {BERT}-Networks",
+    author = "Reimers, Nils  and
+      Gurevych, Iryna",
+    editor = "Inui, Kentaro  and
+      Jiang, Jing  and
+      Ng, Vincent  and
+      Wan, Xiaojun",
+    booktitle = "Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP)",
+    month = nov,
+    year = "2019",
+    address = "Hong Kong, China",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/D19-1410/",
+    doi = "10.18653/v1/D19-1410",
+    pages = "3982--3992",
+    abstract = "BERT (Devlin et al., 2018) and RoBERTa (Liu et al., 2019) has set a new state-of-the-art performance on sentence-pair regression tasks like semantic textual similarity (STS). However, it requires that both sentences are fed into the network, which causes a massive computational overhead: Finding the most similar pair in a collection of 10,000 sentences requires about 50 million inference computations ({\textasciitilde}65 hours) with BERT. The construction of BERT makes it unsuitable for semantic similarity search as well as for unsupervised tasks like clustering. In this publication, we present Sentence-BERT (SBERT), a modification of the pretrained BERT network that use siamese and triplet network structures to derive semantically meaningful sentence embeddings that can be compared using cosine-similarity. This reduces the effort for finding the most similar pair from 65 hours with BERT / RoBERTa to about 5 seconds with SBERT, while maintaining the accuracy from BERT. We evaluate SBERT and SRoBERTa on common STS tasks and transfer learning tasks, where it outperforms other state-of-the-art sentence embeddings methods."
+}
+
+
+@article{han2015deep,
+  title={Deep Compression: Compressing Deep Neural Network with Pruning, Trained Quantization and Huffman Coding},
+  author={Song Han and Huizi Mao and William J. Dally},
+  booktitle={International Conference on Learning Representations},
+  year={2016},
+  url={https://api.semanticscholar.org/CorpusID:2134321}
+}
+
+@inproceedings{
+frankle2019lottery,
+title={The Lottery Ticket Hypothesis: Finding Sparse, Trainable Neural Networks},
+author={Jonathan Frankle and Michael Carbin},
+booktitle={International Conference on Learning Representations},
+year={2019},
+url={https://openreview.net/forum?id=rJl-b3RcF7},
+}
+
+@misc{hinton2015distilling,
+  abstract = {A very simple way to improve the performance of almost any machine learning
+algorithm is to train many different models on the same data and then to
+average their predictions. Unfortunately, making predictions using a whole
+ensemble of models is cumbersome and may be too computationally expensive to
+allow deployment to a large number of users, especially if the individual
+models are large neural nets. Caruana and his collaborators have shown that it
+is possible to compress the knowledge in an ensemble into a single model which
+is much easier to deploy and we develop this approach further using a different
+compression technique. We achieve some surprising results on MNIST and we show
+that we can significantly improve the acoustic model of a heavily used
+commercial system by distilling the knowledge in an ensemble of models into a
+single model. We also introduce a new type of ensemble composed of one or more
+full models and many specialist models which learn to distinguish fine-grained
+classes that the full models confuse. Unlike a mixture of experts, these
+specialist models can be trained rapidly and in parallel.},
+  added-at = {2016-11-28T13:41:24.000+0100},
+  author = {Hinton, Geoffrey and Vinyals, Oriol and Dean, Jeff},
+  biburl = {https://www.bibsonomy.org/bibtex/2e2fe59d126c999a54c61f34eda60eeb9/machinelearning},
+  interhash = {67f341022f752a5833b5c6c35903c111},
+  intrahash = {e2fe59d126c999a54c61f34eda60eeb9},
+  keywords = {ml proposal tau},
+  note = {cite arxiv:1503.02531Comment: NIPS 2014 Deep Learning Workshop},
+  timestamp = {2016-11-28T13:41:24.000+0100},
+  title = {Distilling the Knowledge in a Neural Network},
+  url = {http://arxiv.org/abs/1503.02531},
+  year = 2015
+}
+
+
+@article{sanh2019distilbert,
+  added-at = {2022-10-17T09:26:28.000+0200},
+  author = {Sanh, Victor and Debut, Lysandre and Chaumond, Julien and Wolf, Thomas},
+  biburl = {https://www.bibsonomy.org/bibtex/2266af65c030b811ad0ef5cdeead94ec0/tobias.koopmann},
+  interhash = {9dd3cb1425c438e975402a7729f06f7f},
+  intrahash = {266af65c030b811ad0ef5cdeead94ec0},
+  journal = {arXiv preprint arXiv:1910.01108},
+  keywords = {readinglist},
+  timestamp = {2022-10-17T09:26:28.000+0200},
+  title = {DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter},
+  year = 2019
+}
+
+
+@inproceedings{jiao2020tinybert,
+    title = "{T}iny{BERT}: Distilling {BERT} for Natural Language Understanding",
+    author = "Jiao, Xiaoqi  and
+      Yin, Yichun  and
+      Shang, Lifeng  and
+      Jiang, Xin  and
+      Chen, Xiao  and
+      Li, Linlin  and
+      Wang, Fang  and
+      Liu, Qun",
+    editor = "Cohn, Trevor  and
+      He, Yulan  and
+      Liu, Yang",
+    booktitle = "Findings of the Association for Computational Linguistics: EMNLP 2020",
+    month = nov,
+    year = "2020",
+    address = "Online",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2020.findings-emnlp.372/",
+    doi = "10.18653/v1/2020.findings-emnlp.372",
+    pages = "4163--4174",
+    abstract = "Language model pre-training, such as BERT, has significantly improved the performances of many natural language processing tasks. However, pre-trained language models are usually computationally expensive, so it is difficult to efficiently execute them on resource-restricted devices. To accelerate inference and reduce model size while maintaining accuracy, we first propose a novel Transformer distillation method that is specially designed for knowledge distillation (KD) of the Transformer-based models. By leveraging this new KD method, the plenty of knowledge encoded in a large {\textquotedblleft}teacher{\textquotedblright} BERT can be effectively transferred to a small {\textquotedblleft}student{\textquotedblright} TinyBERT. Then, we introduce a new two-stage learning framework for TinyBERT, which performs Transformer distillation at both the pre-training and task-specific learning stages. This framework ensures that TinyBERT can capture the general-domain as well as the task-specific knowledge in BERT. TinyBERT4 with 4 layers is empirically effective and achieves more than 96.8{\%} the performance of its teacher BERT-Base on GLUE benchmark, while being 7.5x smaller and 9.4x faster on inference. TinyBERT4 is also significantly better than 4-layer state-of-the-art baselines on BERT distillation, with only {\textasciitilde}28{\%} parameters and {\textasciitilde}31{\%} inference time of them. Moreover, TinyBERT6 with 6 layers performs on-par with its teacher BERT-Base."
+}
+
+
+@inproceedings{devlin2019bert,
+    title = "{BERT}: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    author = "Devlin, Jacob  and
+      Chang, Ming-Wei  and
+      Lee, Kenton  and
+      Toutanova, Kristina",
+    editor = "Burstein, Jill  and
+      Doran, Christy  and
+      Solorio, Thamar",
+    booktitle = "Proceedings of the 2019 Conference of the North {A}merican Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers)",
+    month = jun,
+    year = "2019",
+    address = "Minneapolis, Minnesota",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/N19-1423/",
+    doi = "10.18653/v1/N19-1423",
+    pages = "4171--4186",
+    abstract = "We introduce a new language representation model called BERT, which stands for Bidirectional Encoder Representations from Transformers. Unlike recent language representation models (Peters et al., 2018a; Radford et al., 2018), BERT is designed to pre-train deep bidirectional representations from unlabeled text by jointly conditioning on both left and right context in all layers. As a result, the pre-trained BERT model can be fine-tuned with just one additional output layer to create state-of-the-art models for a wide range of tasks, such as question answering and language inference, without substantial task-specific architecture modifications. BERT is conceptually simple and empirically powerful. It obtains new state-of-the-art results on eleven natural language processing tasks, including pushing the GLUE score to 80.5 (7.7 point absolute improvement), MultiNLI accuracy to 86.7{\%} (4.6{\%} absolute improvement), SQuAD v1.1 question answering Test F1 to 93.2 (1.5 point absolute improvement) and SQuAD v2.0 Test F1 to 83.1 (5.1 point absolute improvement)."
+}
+
+@misc{
+liu2019roberta,
+title={Ro{\{}BERT{\}}a: A Robustly Optimized {\{}BERT{\}} Pretraining Approach},
+author={Yinhan Liu and Myle Ott and Naman Goyal and Jingfei Du and Mandar Joshi and Danqi Chen and Omer Levy and Mike Lewis and Luke Zettlemoyer and Veselin Stoyanov},
+year={2020},
+url={https://openreview.net/forum?id=SyxS0T4tvS}
+}
+
+@inproceedings{jacob2018quantization,
+  author={Jacob, Benoit and Kligys, Skirmantas and Chen, Bo and Zhu, Menglong and Tang, Matthew and Howard, Andrew and Adam, Hartwig and Kalenichenko, Dmitry},
+  booktitle={2018 IEEE/CVF Conference on Computer Vision and Pattern Recognition}, 
+  title={Quantization and Training of Neural Networks for Efficient Integer-Arithmetic-Only Inference}, 
+  year={2018},
+  volume={},
+  number={},
+  pages={2704-2713},
+  keywords={Quantization (signal);Training;Arrays;Computational modeling;Hardware;Neural networks},
+  doi={10.1109/CVPR.2018.00286}}
+
+@inproceedings{
+li2016pruning,
+title={Pruning Filters for Efficient ConvNets},
+author={Hao Li and Asim Kadav and Igor Durdanovic and Hanan Samet and Hans Peter Graf},
+booktitle={International Conference on Learning Representations},
+year={2017},
+url={https://openreview.net/forum?id=rJqFGTslg}
+}
+
+
+
+@InProceedings{houlsby2019parameter,
+  title = 	 {Parameter-Efficient Transfer Learning for {NLP}},
+  author =       {Houlsby, Neil and Giurgiu, Andrei and Jastrzebski, Stanislaw and Morrone, Bruna and De Laroussilhe, Quentin and Gesmundo, Andrea and Attariyan, Mona and Gelly, Sylvain},
+  booktitle = 	 {Proceedings of the 36th International Conference on Machine Learning},
+  pages = 	 {2790--2799},
+  year = 	 {2019},
+  editor = 	 {Chaudhuri, Kamalika and Salakhutdinov, Ruslan},
+  volume = 	 {97},
+  series = 	 {Proceedings of Machine Learning Research},
+  month = 	 {09--15 Jun},
+  publisher =    {PMLR},
+  pdf = 	 {http://proceedings.mlr.press/v97/houlsby19a/houlsby19a.pdf},
+  url = 	 {https://proceedings.mlr.press/v97/houlsby19a.html},
+  abstract = 	 {Fine-tuning large pretrained models is an effective transfer mechanism in NLP. However, in the presence of many downstream tasks, fine-tuning is parameter inefficient: an entire new model is required for every task. As an alternative, we propose transfer with adapter modules. Adapter modules yield a compact and extensible model; they add only a few trainable parameters per task, and new tasks can be added without revisiting previous ones. The parameters of the original network remain fixed, yielding a high degree of parameter sharing. To demonstrate adapter’s effectiveness, we transfer the recently proposed BERT Transformer model to $26$ diverse text classification tasks, including the GLUE benchmark. Adapters attain near state-of-the-art performance, whilst adding only a few parameters per task. On GLUE, we attain within $0.8%$ of the performance of full fine-tuning, adding only $3.6%$ parameters per task. By contrast, fine-tuning trains $100%$ of the parameters per task.}
+}
+
+@article{jegou2010product,
+author = {Jegou, Herve and Douze, Matthijs and Schmid, Cordelia},
+title = {Product Quantization for Nearest Neighbor Search},
+year = {2011},
+issue_date = {January 2011},
+publisher = {IEEE Computer Society},
+address = {USA},
+volume = {33},
+number = {1},
+issn = {0162-8828},
+url = {https://doi.org/10.1109/TPAMI.2010.57},
+doi = {10.1109/TPAMI.2010.57},
+abstract = {This paper introduces a product quantization-based approach for approximate nearest neighbor search. The idea is to decompose the space into a Cartesian product of low-dimensional subspaces and to quantize each subspace separately. A vector is represented by a short code composed of its subspace quantization indices. The euclidean distance between two vectors can be efficiently estimated from their codes. An asymmetric version increases precision, as it computes the approximate distance between a vector and a code. Experimental results show that our approach searches for nearest neighbors efficiently, in particular in combination with an inverted file system. Results for SIFT and GIST image descriptors show excellent search accuracy, outperforming three state-of-the-art approaches. The scalability of our approach is validated on a data set of two billion vectors.},
+journal = {IEEE Trans. Pattern Anal. Mach. Intell.},
+month = jan,
+pages = {117–128},
+numpages = {12},
+keywords = {High-dimensional indexing, High-dimensional indexing, image indexing, very large databases, approximate search., approximate search., image indexing, very large databases}
+}
+
+@inproceedings{shen2018nash,
+    title = "{NASH}: Toward End-to-End Neural Architecture for Generative Semantic Hashing",
+    author = "Shen, Dinghan  and
+      Su, Qinliang  and
+      Chapfuwa, Paidamoyo  and
+      Wang, Wenlin  and
+      Wang, Guoyin  and
+      Henao, Ricardo  and
+      Carin, Lawrence",
+    editor = "Gurevych, Iryna  and
+      Miyao, Yusuke",
+    booktitle = "Proceedings of the 56th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
+    month = jul,
+    year = "2018",
+    address = "Melbourne, Australia",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/P18-1190/",
+    doi = "10.18653/v1/P18-1190",
+    pages = "2041--2050",
+    abstract = "Semantic hashing has become a powerful paradigm for fast similarity search in many information retrieval systems. While fairly successful, previous techniques generally require two-stage training, and the binary constraints are handled \textit{ad-hoc}. In this paper, we present an \textit{end-to-end} Neural Architecture for Semantic Hashing (NASH), where the binary hashing codes are treated as \textit{Bernoulli} latent variables. A neural variational inference framework is proposed for training, where gradients are directly backpropagated through the discrete latent variable to optimize the hash function. We also draw the connections between proposed method and \textit{rate-distortion theory}, which provides a theoretical foundation for the effectiveness of our framework. Experimental results on three public datasets demonstrate that our method significantly outperforms several state-of-the-art models on both \textit{unsupervised} and \textit{supervised} scenarios."
+}
+
+@inproceedings{tissier2019binarization,
+author = {Tissier, Julien and Gravier, Christophe and Habrard, Amaury},
+title = {Near-lossless binarization of word embeddings},
+year = {2019},
+isbn = {978-1-57735-809-1},
+publisher = {AAAI Press},
+url = {https://doi.org/10.1609/aaai.v33i01.33017104},
+doi = {10.1609/aaai.v33i01.33017104},
+abstract = {Word embeddings are commonly used as a starting point in many NLP models to achieve state-of-the-art performances. However, with a large vocabulary and many dimensions, these floating-point representations are expensive both in terms of memory and calculations which makes them unsuitable for use on low-resource devices. The method proposed in this paper transforms real-valued embeddings into binary embeddings while preserving semantic information, requiring only 128 or 256 bits for each vector. This leads to a small memory footprint and fast vector operations. The model is based on an autoencoder architecture, which also allows to reconstruct original vectors from the binary ones. Experimental results on semantic similarity, text classification and sentiment analysis tasks show that the binarization of word embeddings only leads to a loss of ~2\% in accuracy while vector size is reduced by 97\%. Furthermore, a top-k benchmark demonstrates that using these binary vectors is 30 times faster than using real-valued vectors.},
+booktitle = {Proceedings of the Thirty-Third AAAI Conference on Artificial Intelligence and Thirty-First Innovative Applications of Artificial Intelligence Conference and Ninth AAAI Symposium on Educational Advances in Artificial Intelligence},
+articleno = {872},
+numpages = {8},
+location = {Honolulu, Hawaii, USA},
+series = {AAAI'19/IAAI'19/EAAI'19}
+}
+
+@inproceedings{
+shu2018compressing,
+title={Compressing Word Embeddings via Deep Compositional Code Learning},
+author={Raphael Shu and Hideki Nakayama},
+booktitle={International Conference on Learning Representations},
+year={2018},
+url={https://openreview.net/forum?id=BJRZzFlRb},
+}
+
+@InProceedings{jaderberg2014speeding,
+  author       = "Max Jaderberg and Andrea Vedaldi and Andrew Zisserman",
+  title        = "Speeding up Convolutional Neural Networks with Low Rank Expansions",
+  booktitle    = "British Machine Vision Conference",
+  year         = "2014",
+}
+
+@INPROCEEDINGS{sainath2013low,
+  author={Sainath, Tara N. and Kingsbury, Brian and Sindhwani, Vikas and Arisoy, Ebru and Ramabhadran, Bhuvana},
+  booktitle={2013 IEEE International Conference on Acoustics, Speech and Signal Processing}, 
+  title={Low-rank matrix factorization for Deep Neural Network training with high-dimensional output targets}, 
+  year={2013},
+  volume={},
+  number={},
+  pages={6655-6659},
+  keywords={Training;Speech recognition;Acoustics;Speech;Accuracy;Neural networks;Hidden Markov models;Deep Neural Networks;Speech Recognition},
+  doi={10.1109/ICASSP.2013.6638949}}
+
+
+@online{vespa2024matryoshka,  
+    author = {Kristoffersen, Jon Marius},  
+    title = {Matryoshka Binary Vectors Slash Vector Search Costs with {Vespa}},  
+    year = {2024},  
+    publisher = {Medium},  
+    organization = {Vespa.ai},  
+    url = {https://medium.com/vespa/matryoshka-binary-vectors-slash-vector-search-costs-with-vespa-517019d792d6},  
+    urldate = {2025-01-15}  
+}  
+  
+@online{jina2024binary,  
+    author = {Han Xiao and Maximilian Werk},  
+    title = {Binary Embeddings: All the {AI}, 3.125\% of the Fat},  
+    year = {2024},  
+    publisher = {Jina AI},  
+    organization = {Jina AI},  
+    url = {https://jina.ai/news/binary-embeddings-all-the-ai-3125-of-the-fat/},  
+    urldate = {2025-01-15}  
+}  
+  
+@online{hf2024quantization,  
+    author = {Pedro Cuenca and Lewis Tunstall},  
+    title = {Embedding Quantization: Compress Your Embeddings for Fun and Profit},  
+    year = {2024},  
+    publisher = {Hugging Face},  
+    organization = {Hugging Face},  
+    url = {https://huggingface.co/blog/embedding-quantization},  
+    urldate = {2025-01-15}  
+}  
+
+@inproceedings{shen2021efficient,
+    title={Efficient Neural Network Training via Forward and Backward Propagation Sparsification},
+    author={Shen, Sheng and Dong, Zhewei and Ye, Jiayu and Ma, Liping and Yao, Zhewei and Gholami, Amir and Mahoney, Michael W and Keutzer, Kurt},
+    booktitle={Advances in Neural Information Processing Systems},
+    volume={34},
+    pages={16755--16768},
+    year={2021}
+}
+
+
+@inproceedings{wang-etal-2024-compression,
+    title = "When Compression Meets Model Compression: Memory-Efficient Double Compression for Large Language Models",
+    author = "Wang, Weilan  and
+      Mao, Yu  and
+      Dongdong, Tang  and
+      Hongchao, Du  and
+      Guan, Nan  and
+      Xue, Chun Jason",
+    editor = "Al-Onaizan, Yaser  and
+      Bansal, Mohit  and
+      Chen, Yun-Nung",
+    booktitle = "Findings of the Association for Computational Linguistics: EMNLP 2024",
+    month = nov,
+    year = "2024",
+    address = "Miami, Florida, USA",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2024.findings-emnlp.988/",
+    doi = "10.18653/v1/2024.findings-emnlp.988",
+    pages = "16973--16983",
+    abstract = "Large language models (LLMs) exhibit excellent performance in various tasks. However, the memory requirements of LLMs present a great challenge when deploying on memory-limited devices, even for quantized LLMs. This paper introduces a framework to compress LLM after quantization further, achieving about 2.2x compression ratio. A compression-aware quantization is first proposed to enhance model weight compressibility by re-scaling the model parameters before quantization, followed by a pruning method to improve further. Upon this, we notice that decompression can be a bottleneck during practical scenarios. We then give a detailed analysis of the trade-off between memory usage and latency brought by the proposed method. A speed-adaptive method is proposed to overcome it. The experimental results show inference with the compressed model can achieve a 40{\%} reduction in memory size with negligible loss in accuracy and inference speed."
+}
+
+@inproceedings{
+mishra2018apprentice,
+title={Apprentice: Using Knowledge Distillation Techniques To Improve Low-Precision Network Accuracy},
+author={Asit Mishra and Debbie Marr},
+booktitle={International Conference on Learning Representations},
+year={2018},
+url={https://openreview.net/forum?id=B1ae1lZRb},
+}
+
+@article{hubara2017quantized,
+author = {Hubara, Itay and Courbariaux, Matthieu and Soudry, Daniel and El-Yaniv, Ran and Bengio, Yoshua},
+title = {Quantized neural networks: training neural networks with low precision weights and activations},
+year = {2017},
+issue_date = {January 2017},
+publisher = {JMLR.org},
+volume = {18},
+number = {1},
+issn = {1532-4435},
+abstract = {We introduce a method to train Quantized Neural Networks (QNNs) -- neural networks with extremely low precision (e.g., 1-bit) weights and activations, at run-time. At traintime the quantized weights and activations are used for computing the parameter gradients. During the forward pass, QNNs drastically reduce memory size and accesses, and replace most arithmetic operations with bit-wise operations. As a result, power consumption is expected to be drastically reduced. We trained QNNs over the MNIST, CIFAR-10, SVHN and ImageNet datasets. The resulting QNNs achieve prediction accuracy comparable to their 32-bit counterparts. For example, our quantized version of AlexNet with 1-bit weights and 2-bit activations achieves 51\% top-1 accuracy. Moreover, we quantize the parameter gradients to 6-bits as well which enables gradients computation using only bit-wise operation. Quantized recurrent neural networks were tested over the Penn Treebank dataset, and achieved comparable accuracy as their 32-bit counterparts using only 4-bits. Last but not least, we programmed a binary matrix multiplication GPU kernel with which it is possible to run our MNIST QNN 7 times faster than with an unoptimized GPU kernel, without suffering any loss in classification accuracy. The QNN code is available online.},
+journal = {J. Mach. Learn. Res.},
+month = jan,
+pages = {6869–6898},
+numpages = {30},
+keywords = {neural networks compression, language models, energy efficient neural networks, deep learning, computer vision}
+}
+
+@inproceedings{dettmers2022llm,
+author = {Dettmers, Tim and Lewis, Mike and Belkada, Younes and Zettlemoyer, Luke},
+title = {LLM.int8(): 8-bit matrix multiplication for transformers at scale},
+year = {2024},
+isbn = {9781713871088},
+publisher = {Curran Associates Inc.},
+address = {Red Hook, NY, USA},
+abstract = {Large language models have been widely adopted but require significant GPU memory for inference. We develop a procedure for Int8 matrix multiplication for feed-forward and attention projection layers in transformers, which cut the memory needed for inference by half while retaining full precision performance. With our method, a 175B parameter 16/32-bit checkpoint can be loaded, converted to Int8, and used immediately without performance degradation. This is made possible by understanding and working around properties of highly systematic emergent features in transformer language models that dominate attention and transformer predictive performance. To cope with these features, we develop a two-part quantization procedure, <b>LLM.int8()</b>. We first use vector-wise quantization with separate normalization constants for each inner product in the matrix multiplication, to quantize most of the features. However, for the emergent outliers, we also include a new mixed-precision decomposition scheme, which isolates the outlier feature dimensions into a 16-bit matrix multiplication while still more than 99.9\% of values are multiplied in 8-bit. Using LLM.int8(), we show empirically it is possible to perform inference in LLMs with up to 175B parameters without any performance degradation. This result makes such models much more accessible, for example making it possible to use OPT-175B/BLOOM on a single server with consumer GPUs. We open source our software.},
+booktitle = {Proceedings of the 36th International Conference on Neural Information Processing Systems},
+articleno = {2198},
+numpages = {15},
+location = {New Orleans, LA, USA},
+series = {NIPS '22}
+}
+
+
+@article{jolliffe2016principal,
+  title={Principal component analysis: a review and recent developments},
+  author={Jolliffe, Ian T and Cadima, Jorge},
+  journal={Philosophical Transactions of the Royal Society A},
+  volume={374},
+  number={2065},
+  pages={20150202},
+  year={2016},
+  publisher={The Royal Society},
+  doi={10.1098/rsta.2015.0202}
+}
+
+@article{golub1971singular,
+  title={Singular value decomposition and least squares solutions},
+  author={Golub, Gene H and Reinsch, Christian},
+  journal={Numerische mathematik},
+  volume={14},
+  number={5},
+  pages={403--420},
+  year={1970},
+  publisher={Springer},
+  doi={10.1007/BF02163027}
+}
+
+@article{hinton2006reducing,
+  title={Reducing the dimensionality of data with neural networks},
+  author={Hinton, Geoffrey E and Salakhutdinov, Ruslan R},
+  journal={Science},
+  volume={313},
+  number={5786},
+  pages={504--507},
+  year={2006},
+  publisher={American Association for the Advancement of Science},
+  doi={10.1126/science.1127647}
+}
+
+@article{maaten2008visualizing,
+  author={van der Maaten, Laurens and Hinton, Geoffrey},
+  title={Visualizing Data using t-SNE},
+  journal={Journal of Machine Learning Research},
+  year={2008},
+  volume={9},
+  number={86},
+  pages={2579--2605}
+}
+
+@article{mcinnes2018umap,
+  title={UMAP: Uniform Manifold Approximation and Projection},
+  author={McInnes, Leland and Healy, John and Saul, Nathaniel and Gro{\ss}berger, Lukas},
+  journal={Journal of Open Source Software},
+  volume={3},
+  number={29},
+  pages={861},
+  year={2018},
+  doi={10.21105/joss.00861}
+}
+
+@article{wang2023bitnet,
+  title={BitNet: Scaling 1-bit Transformers for Large Language Models},
+  author={Hongyu Wang and Shuming Ma and Li Dong and Shaohan Huang and Huaijie Wang and Lingxiao Ma and Fan Yang and Ruiping Wang and Yi Wu and Furu Wei},
+  journal={ArXiv},
+  year={2023},
+  volume={abs/2310.11453},
+  url={https://api.semanticscholar.org/CorpusID:264172438}
+}
+
+@INPROCEEDINGS {dong2019hawq,
+author = { Dong, Zhen and Yao, Zhewei and Gholami, Amir and Mahoney, Michael and Keutzer, Kurt },
+booktitle = { 2019 IEEE/CVF International Conference on Computer Vision (ICCV) },
+title = {{ HAWQ: Hessian AWare Quantization of Neural Networks With Mixed-Precision }},
+year = {2019},
+volume = {},
+ISSN = {},
+pages = {293-302},
+abstract = { Model size and inference speed/power have become a major challenge in the deployment of neural networks for many applications. A promising approach to address these problems is quantization. However, uniformly quantizing a model to ultra-low precision leads to significant accuracy degradation. A novel solution for this is to use mixed-precision quantization, as some parts of the network may allow lower precision as compared to other layers. However, there is no systematic way to determine the precision of different layers. A brute force approach is not feasible for deep networks, as the search space for mixed-precision is exponential in the number of layers. Another challenge is a similar factorial complexity for determining block-wise fine-tuning order when quantizing the model to a target precision. Here, we introduce Hessian AWare Quantization (HAWQ), a novel second-order quantization method to address these problems. HAWQ allows for the automatic selection of the relative quantization precision of each layer, based on the layer's Hessian spectrum. Moreover, HAWQ provides a deterministic fine-tuning order for quantizing layers. We show the results of our method on Cifar-10 using ResNet20, and on ImageNet using Inception-V3, ResNet50 and SqueezeNext models. Comparing HAWQ with state-of-the-art shows that we can achieve similar/better accuracy with 8× activation compression ratio on ResNet20, as compared to DNAS, and up to 1% higher accuracy with up to 14% smaller models on ResNet50 and Inception-V3, compared to recently proposed methods of RVQuant and HAQ. Furthermore, we show that we can quantize SqueezeNext to just 1MB model size while achieving above 68% top1 accuracy on ImageNet. },
+keywords = {Quantization (signal);Artificial neural networks;Computational modeling;Eigenvalues and eigenfunctions;Sensitivity;Image resolution},
+doi = {10.1109/ICCV.2019.00038},
+url = {https://doi.ieeecomputersociety.org/10.1109/ICCV.2019.00038},
+publisher = {IEEE Computer Society},
+address = {Los Alamitos, CA, USA},
+month =Nov}
+
+
+@INPROCEEDINGS{wang2019haq,
+  author={Wang, Kuan and Liu, Zhijian and Lin, Yujun and Lin, Ji and Han, Song},
+  booktitle={2019 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)}, 
+  title={HAQ: Hardware-Aware Automated Quantization With Mixed Precision}, 
+  year={2019},
+  volume={},
+  number={},
+  pages={8604-8612},
+  keywords={Vision Applications and Systems;Deep Learning},
+  doi={10.1109/CVPR.2019.00881}}
+
+
+@inproceedings{andoni2014beyond,
+author = {Andoni, Alexandr and Indyk, Piotr and Nguyen, Huy L. and Razenshteyn, Ilya},
+title = {Beyond locality-sensitive hashing},
+year = {2014},
+isbn = {9781611973389},
+publisher = {Society for Industrial and Applied Mathematics},
+address = {USA},
+abstract = {We present a new data structure for the c-approximate near neighbor problem (ANN) in the Euclidean space. For n points in Rd, our algorithm achieves Oc(nρ + dlogn) query time and Oc(n1+ρ + dlogn) space, where ρ ≤ 7/(8c2) + O(1/c3) + oc(1). This is the first improvement over the result by Andoni and Indyk (FOCS 2006) and the first data structure that bypasses a locality-sensitive hashing lower bound proved by O'Donnell, Wu and Zhou (ICS 2011). By a standard reduction we obtain a data structure for the Hamming space and ℓ1 norm with ρ ≤ 7/(8c)+ O(1/c3/2)+ oc(1), which is the first improvement over the result of Indyk and Motwani (STOC 1998).},
+booktitle = {Proceedings of the Twenty-Fifth Annual ACM-SIAM Symposium on Discrete Algorithms},
+pages = {1018–1028},
+numpages = {11},
+location = {Portland, Oregon},
+series = {SODA '14}
+}
+
+@inproceedings{andoni2006near,
+  author={Andoni, Alexandr and Indyk, Piotr},
+  booktitle={2006 47th Annual IEEE Symposium on Foundations of Computer Science (FOCS'06)}, 
+  title={Near-Optimal Hashing Algorithms for Approximate Nearest Neighbor in High Dimensions}, 
+  year={2006},
+  pages={459-468},
+  doi={10.1109/FOCS.2006.49}
+}
+
+@article{wang2017survey,
+  author={Wang, Jingdong and Zhang, Ting and song, jingkuan and Sebe, Nicu and Shen, Heng Tao},
+  journal={IEEE Transactions on Pattern Analysis and Machine Intelligence}, 
+  title={A Survey on Learning to Hash}, 
+  year={2018},
+  volume={40},
+  number={4},
+  pages={769-790},
+  doi={10.1109/TPAMI.2017.2699960}
+}
+
+@InProceedings{jacob2018quantization,
+author = {Jacob, Benoit and Kligys, Skirmantas and Chen, Bo and Zhu, Menglong and Tang, Matthew and Howard, Andrew and Adam, Hartwig and Kalenichenko, Dmitry},
+title = {Quantization and Training of Neural Networks for Efficient Integer-Arithmetic-Only Inference},
+booktitle = {Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+month = {June},
+year = {2018}
+}
+
+@inproceedings{paszke2017automatic,
+  title={Automatic differentiation in PyTorch},
+  author={Paszke, Adam and Gross, Sam and Chintala, Soumith and Chanan, Gregory and Yang, Edward and DeVito, Zachary and Lin, Zeming and Desmaison, Alban and Antiga, Luca and Lerer, Adam},
+  booktitle={NIPS-W},
+  year={2017}
+}
+
+
+@inproceedings{
+loshchilov2018decoupled,
+title={Decoupled Weight Decay Regularization},
+author={Ilya Loshchilov and Frank Hutter},
+booktitle={International Conference on Learning Representations},
+year={2019},
+url={https://openreview.net/forum?id=Bkg6RiCqY7},
+}
