@@ -104,9 +104,10 @@
   Across extensive evaluations on Modern BERT (MB) and MiniLM models, \textbf{2-bit quantization} and \textbf{Hybrid Quant} consistently recover up to 95--98\% of the original full-precision (FP32) performance while reducing memory usage by over 90\%. 
   Even at low embedding dimensions (e.g., 96--192), QAMA’s hierarchical training ensures that performance remains surprisingly robust, highlighting the effectiveness of our bit-level expansions and nested representation learning.
 
-  Furthermore, our experiments show that end-to-end training with quantization-aware losses yields embeddings that map cleanly into discrete levels, supporting rapid Hamming distance calculations using bitwise operations for large-scale retrieval. 
-  Ablation studies reveal that our suggested component losses contributes to preserving semantic fidelity under aggressive compression. 
-  Our framework \textbf{QAMA} offers a practical means to store, retrieve, and compute similarities between embeddings efficiently, enabling high-accuracy search with faster retrieval speeds under stringent memory and latency constraints.
+  Our proposed end-to-end training with quantization-aware loss yields embeddings that map cleanly into discrete levels, supporting rapid Hamming distance calculations for semantic similarity search. % using bitwise operations. 
+  % Ablation studies reveal that our suggested component losses contributes to preserving semantic fidelity under aggressive compression. 
+  % Our framework \textbf{QAMA} offers a practical means to store, retrieve, and compute similarities between embeddings efficiently, enabling high-accuracy search with faster retrieval speeds under stringent memory and latency constraints.
+  Our framework \textbf{QAMA} offers a practical means to optimize embedding storage and retrieval speed for information retrieval systems.
 \end{abstract}
 
 %%
@@ -135,11 +136,7 @@
          <concept_desc>Information systems~Language models</concept_desc>
          <concept_significance>300</concept_significance>
          </concept>
-     <concept>
-         <concept_id>10010405.10010497.10010498</concept_id>
-         <concept_desc>Applied computing~Document searching</concept_desc>
-         <concept_significance>100</concept_significance>
-         </concept>
+     
    </ccs2012>
 \end{CCSXML}
   
@@ -147,12 +144,12 @@
 \ccsdesc[300]{Information systems~Query representation}
 \ccsdesc[500]{Information systems~Novelty in information retrieval}
 \ccsdesc[300]{Information systems~Language models}
-\ccsdesc[100]{Applied computing~Document searching}
+
 
 %%
 %% Keywords. The author(s) should pick words that accurately describe
 %% the work being presented. Separate the keywords with commas.
-\keywords{embedding compression, matryoshka representation learning, quantization, information retrieval, hierarchical embeddings}
+\keywords{embedding compression, embedding quantization, information retrieval, hierarchical embeddings}
 
 \maketitle
 \let\clearpage\relax  % Disable automatic page breaks

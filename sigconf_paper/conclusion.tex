@@ -1,3 +1,25 @@
-\section{Conclusion}  
-\label{sec:conclusion}  
-Summarize your contributions and the significance of your findings in advancing the field of information retrieval.  
+\section{Conclusion}
+\label{sec:conclusion}
+
+Our paper introduces Quantization Aware Matryoshka Adaptation (QAMA), a unified framework that successfully addresses the dual challenges of embedding storage efficiency and retrieval speed while maintaining semantic fidelity. 
+By combining Matryoshka Representation Learning with multi-level quantization and efficient bitwise operations, our approach achieves remarkable compression rates (90-97\% storage reduction) while preserving 95-98\% of full-precision accuracy—a significant improvement over previous methods that typically saw 10-15\% accuracy drops at similar compression rates.
+
+Our extensive experiments with Modern BERT and MiniLM demonstrate several key findings:
+\begin{itemize}
+    \item Our proposed Matryoshka Loss and specialized regularizations (Orthogonality, Information Bottleneck) enable robust performance even under aggressive compression, with 2-bit quantization consistently recovering 95-98\% of FP32 performance.
+    \item Our hybrid quantization approach, which allocates different bit precisions based on information content, achieves 94.9\% storage reduction while maintaining 99.2\% accuracy and reducing computation time to 0.87× of the baseline.
+    \item The framework shows remarkable dimensional scalability — Modern BERT maintains 96\% of FP32 performance even when compressed to 192 dimensions with 2-bit quantization, while MiniLM retains 97.9\% at 96 dimensions.
+\end{itemize}
+
+We show that effective embedding compression requires more than just post-processing techniques — it demands an end-to-end approach that shapes the embedding space during training. 
+The combination of hierarchical information organization, trainable quantization thresholds, and specialized loss functions creates representations that are inherently amenable to aggressive compression while preserving semantic relationships.
+
+Looking ahead, several promising directions emerge for future research:
+\begin{itemize}
+    \item Extending QAMA to multi-modal embeddings, where different modalities might benefit from different quantization strategies
+    \item Investigating dynamic bit allocation schemes that adapt to query patterns or computational resources in real-time
+    \item Efficient implementation of hamming distance for multi-level quantized embeddings
+\end{itemize}
+
+Our work demonstrates that through careful design of the training pipeline and loss functions, it is possible to create highly compressed embeddings that maintain semantic fidelity while enabling faster retrieval. 
+QAMA offers a practical solution for deploying large-scale embedding systems under real-world constraints, potentially enabling new applications in resource-constrained environments or latency-sensitive scenarios.

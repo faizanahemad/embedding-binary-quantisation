@@ -1,7 +1,5 @@
 \section{Methodology}
 \label{sec:methodology}
-
-\subsection{Overview}
 Our approach combines multiple techniques to create efficient and compact embeddings while preserving semantic relationships. The key components include:
 \begin{itemize}
     \item Neural transformation layers for improved quantization and matryoshka representation learning
@@ -22,67 +20,41 @@ Our approach combines multiple techniques to create efficient and compact embedd
 \label{subsec:quantization_framework}
 
 Our quantization framework converts high-precision embeddings into compact, discrete representations while preserving semantic relationships through a combination of neural transformations and adaptive threshold-based discretization. We first apply a feedforward transformation $\mathbf{z} = \text{FFN}(\mathbf{x}; \theta)$ to optimize the embedding space for quantization, where $\mathbf{x}$ is the input embedding and $\theta$ represents trainable parameters.
-
-\paragraph{Multi-level Quantization}
 We implement multiple quantization levels for flexible storage-performance trade-offs: 2-bit (4 levels), 1.5-bit (3 levels), 1-bit (2 levels), and 0.5-bit (combines dimension pairs) quantization. For $k$-bit quantization with $2^k$ levels, we use $(2^k - 1)$ learnable thresholds per dimension to partition the continuous embedding space. For instance, 2-bit quantization employs three thresholds $\{\theta_1, \theta_2, \theta_3\}$ to create four bins, while 1-bit quantization uses a single threshold for binary partitioning.
-
-\paragraph{Threshold-based Discretization and Learning}
-For a $d$-dimensional embedding space $\mathbf{X} \in \mathbb{R}^{N \times d}$, we initialize thresholds using percentile statistics to ensure balanced quantization:
-\begin{equation}
-    \theta_{i,j} = \text{Quantile}\bigl(\{x_{1,j}, \ldots, x_{N,j}\},\; q_i\bigr)
-\end{equation}
-where $q_i$ are evenly-spaced quantiles in $(0,1)$. During training, thresholds adapt via exponential moving average:
-\begin{equation}
-    \theta_{i,j}^{(\text{new})} = \mu\,\theta_{i,j}^{(\text{old})} + (1-\mu)\;\widehat{\theta}_{i,j}^{(\text{batch})}
-\end{equation}
+For a $d$-dimensional embedding space $\mathbf{X} \in \mathbb{R}^{N \times d}$, we initialize thresholds using percentile statistics to ensure balanced quantization: $\theta_{i,j} = \text{Quantile}\bigl(\{x_{1,j}, \ldots, x_{N,j}\},\; q_i\bigr)$
+where $q_i$ are evenly-spaced quantiles in $(0,1)$. During training, thresholds adapt via exponential moving average: $$\theta_{i,j}^{(\text{new})} = \mu\,\theta_{i,j}^{(\text{old})} + (1-\mu)\;\widehat{\theta}_{i,j}^{(\text{batch})}$$
 with momentum coefficient $\mu \in [0,1]$ and batch-computed thresholds $\widehat{\theta}_{i,j}^{(\text{batch})}$.
-
-\paragraph{Quantization Process}
-The complete process for an input embedding involves: (1) applying the trainable transformation $\mathbf{z} = \text{FFN}(\mathbf{x})$, (2) normalizing $\hat{\mathbf{z}} = \text{normalize}(\mathbf{z})$, and (3) assigning discrete codes:
-\begin{equation}
-    q_j = \sum_{i=1}^{2^k-1} \mathbbm{1}[\hat{z}_j > \theta_{i,j}]
-\end{equation}
+The complete process for an input embedding involves: (1) applying the trainable transformation $\mathbf{z} = \text{FFN}(\mathbf{x})$, (2) normalizing $\hat{\mathbf{z}} = \text{normalize}(\mathbf{z})$, and (3) assigning discrete codes: $q_j = \sum_{i=1}^{2^k-1} \mathbbm{1}[\hat{z}_j > \theta_{i,j}]$
 
 \paragraph{End-to-End Trainability}
-Our framework achieves end-to-end trainability by optimizing continuous-valued embeddings while simultaneously guiding them toward quantization-friendly distributions. Rather than backpropagating through non-differentiable quantization operations, we apply quantization regularization losses (Section~\ref{subsubsec:quant_reg}) that encourage embeddings to cluster away from quantization boundaries. 
-The thresholds themselves are updated using statistics from the continuous embeddings, ensuring the quantization boundaries evolve to match the learned representation space, while the transformation network learns to produce embeddings that naturally align with discrete quantization levels, enabling training without direct gradients through the discretization step.
+Our framework achieves end-to-end trainability by optimizing continuous-valued embeddings while simultaneously guiding them toward quantization-friendly distributions. 
+Rather than backpropagating through non-differentiable quantization operations, we apply quantization regularization losses (Section~\ref{subsubsec:quant_reg}) that encourage embeddings to cluster away from quantization boundaries. 
+The thresholds themselves are updated using statistics from the continuous embeddings.%, ensuring the quantization boundaries evolve to match the learned representation space, while the transformation network learns to produce embeddings that naturally align with discrete quantization levels, enabling training without direct gradients through the discretization step.
 % This framework offers several advantages: optimal organization of embedding dimensions through learned transformations, balanced quantization bins via adaptive thresholds, flexible storage-performance trade-offs through multiple quantization levels, and end-to-end trainability. 
-Experimental results (Section~\ref{sec:experiments}) demonstrate significant compression while maintaining high retrieval accuracy across diverse tasks.
+% Experimental results (Section~\ref{sec:experiments}) demonstrate significant compression while maintaining high retrieval accuracy across diverse tasks.
 
 
 \subsection{Promoting Information High Density in Early Dimensions}
 \label{subsec:matryoshka_and_control}
-Matryoshka Representation Learning (MRL), inspired by Russian nesting dolls, addresses a fundamental challenge in embedding systems: creating representations that remain effective when truncated to smaller dimensions. Traditional embeddings often lose critical information when dimensions are removed since important features are distributed across all dimensions. Our approach extends MRL with additional control mechanisms to create highly efficient, nested representations where the most crucial information is concentrated in early dimensions.
-
-\subsubsection{Core Matryoshka Architecture}
-
+Matryoshka Representation Learning (MRL) creates embeddings that maintain effectiveness when truncated. Unlike traditional embeddings where key features span all dimensions, our enhanced MRL approach concentrates critical information in early dimensions through controlled nesting.
+% Matryoshka Representation Learning (MRL), addresses a fundamental challenge in embedding systems: creating representations that remain effective when truncated to smaller dimensions. 
+% Traditional embeddings often lose critical information when dimensions are removed since important features are distributed across all dimensions. 
+% Our approach extends MRL with additional control mechanisms to create highly efficient, nested representations where the most crucial information is concentrated in early dimensions.
+% inspired by Russian nesting dolls,
+% \subsubsection{Core Matryoshka Architecture}
 \paragraph{Nested Representation Generation}
-Given an input embedding $\mathbf{x} \in \mathbb{R}^d$, we generate a series of nested representations at different dimension levels $D = \{d_1, d_2, ..., d_K\}$ where $d_1 < d_2 < ... < d_K = d$. Each level $k$ contains all information from previous levels plus additional features:
+Given an input embedding $\mathbf{x} \in \mathbb{R}^d$, we generate a series of nested representations at different dimension levels $\mathcal{D} = \{d_1, d_2, ..., d_K\}$ where $d_1 < d_2 < ... < d_K = d$. 
+First, we transform the input through a feed-forward network: $\mathbf{z} = \text{FFN}(\mathbf{x}; \theta) \in \mathbb{R}^d$
 
+Unlike traditional MRL implementations that use separate projections for each scale, we employ an efficient progressive slicing mechanism.
+We create level-specific representations through progressive slicing:
 \begin{equation}
-    \mathbf{y}_k = f_k(\mathbf{x}) \in \mathbb{R}^{d_k}, \quad k = 1,\ldots,K
+    \mathbf{z}_k = \text{Slice}_{d_{k-1}}^{d_k}(\mathbf{z}), \quad k = 1,\ldots,K
 \end{equation}
 
-The key nesting property ensures that smaller representations are perfect subsets of larger ones:
-\begin{equation}
-    \mathbf{y}_i[1:d_j] = \mathbf{y}_j \quad \text{for } j < i
-\end{equation}
-
-\paragraph{Base Transformation Network}
-We implement the transformation function $f_k$ using the same lightweight yet effective feed-forward network as introduced in the quantization framework, where $\mathbf{h} = \text{FFN}(\mathbf{x}) = W_2(\text{GELU}(W_1\mathbf{x}))$. Here, $W_1 \in \mathbb{R}^{32d \times d}$ expands the representation for richer feature extraction, GELU activation adds non-linearity while maintaining smooth gradients, and $W_2 \in \mathbb{R}^{d \times 32d}$ projects back to original dimension space. This shared architecture ensures consistency across both the matryoshka representation learning and quantization stages of our pipeline.
-
-\paragraph{Progressive Dimension Slicing}
-Unlike traditional MRL implementations that use separate projections for each scale, we employ an efficient progressive slicing mechanism:
-
-\begin{equation}
-    \mathbf{y}_k = \text{Slice}_{d_{k-1}}^{d_k}(\mathbf{h})
-\end{equation}
-
-The full embedding at level $k$ is constructed through concatenation:
-\begin{equation}
-    \mathbf{e}_k = [\mathbf{y}_1; \mathbf{y}_2; ...; \mathbf{y}_k]
-\end{equation}
-
+The key nesting property ensures that smaller representations are perfect subsets of larger ones: $\mathbf{z}_i[1:d_j] = \mathbf{z}_j \quad \text{for } j < i$
+The full embedding at level $k$ is constructed through concatenation: $\mathbf{e}_k = [\mathbf{z}_1; \mathbf{z}_2; ...; \mathbf{z}_k]$
+We implement the transformation function $\text{FFN}$ using the same lightweight yet effective feed-forward network as introduced in the quantization framework, where $\mathbf{z} = \text{FFN}(\mathbf{x}; \theta) = \mathbf{W}_2(\text{GELU}(\mathbf{W}_1\mathbf{x}))$. 
 This approach inherently maintains the nested property without requiring explicit constraints, reducing computational overhead.
 
 \paragraph{Combined Loss Function}
@@ -90,42 +62,33 @@ Our training objective combines multiple loss components, each with their corres
 
 \begin{equation}
 \begin{split}
-    \mathcal{L}_{\text{total}} = & \sum_{d \in D} \sum_{l \in \mathcal{L}} w_l^{(d)} \mathcal{L}_l^{(d)}
+    \mathcal{L}_{\text{total}} = & \sum_{d \in \mathcal{D}} \sum_{l \in \mathcal{L}} w_l^{(d)} \mathcal{L}_l^{(d)}
 \end{split}
 \end{equation}
 
 where $w_l^{(d)}$ represents the weight for loss component $l$ at dimension level $d$.
-
 \subsection{Loss Functions and Training Objectives}
+\label{subsec:loss_functions}
 
-In our proposed Matryoshka Representation Learning (MRL) framework, we integrate both \emph{similarity preservation} and \emph{matryoshka adaptation} losses to achieve nested, multilevel embeddings that maintain semantic quality at each quantization level. Additionally, a \emph{quantization regularization} component ensures that the learned representation is readily quantizable with minimal loss in accuracy. Below, we detail each category of losses and explain how they contribute to our overall training scheme.
+In our proposed Matryoshka Representation Learning (MRL) framework, we integrate both \emph{similarity preservation} and \emph{matryoshka adaptation} losses to achieve nested, multilevel embeddings that maintain semantic quality at each quantization level.
+Additionally, a \emph{quantization regularization} component ensures that the learned representation is readily quantizable with minimal loss in accuracy. 
+% Below, we detail each category of losses and explain how they contribute to our overall training scheme.
 
 \subsubsection{Similarity Preservation}
-
 \paragraph{Direct Similarity MSE Loss}
 We first ensure preservation of pairwise similarities via a mean squared error (MSE) loss on the normalized similarity matrices:
 \begin{equation}
     \mathcal{L}_{\text{sim}}(\mathbf{X}, \mathbf{Y}) = \|\mathbf{S}_X - \mathbf{S}_Y\|_F^2
 \end{equation}
-where:
-\begin{equation}
-    \mathbf{S}_X = \text{normalize}(\mathbf{X}) \,\text{normalize}(\mathbf{X})^T, 
-    \quad 
-    \mathbf{S}_Y = \text{normalize}(\mathbf{Y}) \,\text{normalize}(\mathbf{Y})^T,
-\end{equation}
+where $\mathbf{S}_X = \text{normalize}(\mathbf{X}) \,\text{normalize}(\mathbf{X})^T$ and $\mathbf{S}_Y = \text{normalize}(\mathbf{Y}) \,\text{normalize}(\mathbf{Y})^T$
 preserving the cosine similarities between all pairs of embeddings $\mathbf{X}$ and $\mathbf{Y}$ at different quantization levels.
 
 \paragraph{KL Divergence Loss}
 To align the probability distributions of similarities, we employ a symmetric KL divergence with temperature scaling:
 \begin{equation}
-    \mathbf{P}_X = \text{softmax}(\mathbf{S}_X/\tau), 
-    \quad 
-    \mathbf{P}_Y = \text{softmax}(\mathbf{S}_Y/\tau),
-\end{equation}
-\begin{equation}
     \mathcal{L}_{\text{kl}} = \tfrac{1}{2}\bigl[D_{\text{KL}}(\mathbf{P}_X\|\mathbf{P}_Y) + D_{\text{KL}}(\mathbf{P}_Y\|\mathbf{P}_X)\bigr],
 \end{equation}
-where $\tau$ controls the sharpness of the distribution.
+where $\tau$ controls the sharpness of the distribution and $\mathbf{P}_X = \text{softmax}(\mathbf{S}_X/\tau)$ and $\mathbf{P}_Y = \text{softmax}(\mathbf{S}_Y/\tau)$
 
 \paragraph{Rank Preservation Loss}
 To maintain the \emph{relative ordering} of similarities, we implement a differentiable ranking loss:
@@ -153,7 +116,8 @@ We encourage essential features to concentrate in earlier dimensions:
     \mathcal{L}_{\text{ib}} = \sum_{i=1}^{n} w_i 
     \left(\frac{|\mathbf{x}_i|^2}{x_0 + |\mathbf{x}_i|}\right)^\alpha,
 \end{equation}
-where $w_i = i/n$ progressively increases with dimension index $i$, $x_0 \approx 0.1$ is a small suppression threshold, and $\alpha\approx 0.3$ controls the gradient strength near zero. This approach pushes less important information toward zero in higher dimensions.
+where $w_i = i/n$ progressively increases with dimension index $i$, $x_0 \approx 0.1$ is a small suppression threshold, and $\alpha\approx 0.3$ controls the gradient strength near zero. 
+This approach pushes less important information (values close to zero) towards zero in higher dimensions.
 
 \paragraph{Inter-level Orthogonal Information Encoding}
 We promote uniqueness of newly added dimensions by enforcing orthogonality with respect to previously formed dimensions:
@@ -200,15 +164,18 @@ where $w(t)$ progresses from $0.2$ to $1.0$ over training to gradually strengthe
 where $l$ and $u$ are the lower and upper bounds of acceptable ranges. Intuitively, this loss repels the embedding away from threshold boundaries (to avoid ambiguity) and adjusts overly large or negative values back into a valid quantization domain.
 
 
-By combining these losses, we achieve a robust training procedure that satisfies several objectives simultaneously:
-\begin{itemize}
-    \item \textbf{Similarity Preservation:} $\mathcal{L}_{\text{sim}}, \mathcal{L}_{\text{kl}}, \mathcal{L}_{\text{rank}}, \mathcal{L}_{\text{contrast}}$ ensure semantic fidelity across different quantization levels.
-    \item \textbf{Matryoshka Property:} $\mathcal{L}_{\text{ib}}, \mathcal{L}_{\text{orth}}, \mathcal{L}_{\text{var}}$ organize the learned features hierarchically, pushing essential features into early dimensions while maintaining uniqueness and stable variance distribution across expanding dimensional levels.
-    \item \textbf{Quantization Readiness:} $\mathcal{L}_{\text{quant}}$ directly encourages embeddings to settle into regions that are easily separable by the quantizer, thereby reducing errors from threshold-based discretization.
-\end{itemize}
+% By combining these losses, we achieve a robust training procedure that satisfies several objectives simultaneously:
+% \begin{itemize}
+%     \item \textbf{Similarity Preservation:} $\mathcal{L}_{\text{sim}}, \mathcal{L}_{\text{kl}}, \mathcal{L}_{\text{rank}}, \mathcal{L}_{\text{contrast}}$ ensure semantic fidelity across different quantization levels.
+%     \item \textbf{Matryoshka Property:} $\mathcal{L}_{\text{ib}}, \mathcal{L}_{\text{orth}}, \mathcal{L}_{\text{var}}$ organize the learned features hierarchically, pushing essential features into early dimensions while maintaining uniqueness and stable variance distribution across expanding dimensional levels.
+%     \item \textbf{Quantization Readiness:} $\mathcal{L}_{\text{quant}}$ directly encourages embeddings to settle into regions that are easily separable by the quantizer, thereby reducing errors from threshold-based discretization.
+% \end{itemize}
 
+By combining these losses, we achieve a robust training procedure where $\mathcal{L}_{\text{sim}}, \mathcal{L}_{\text{kl}}, \mathcal{L}_{\text{rank}}, \mathcal{L}_{\text{contrast}}$ ensure semantic fidelity across different quantization levels, 
+$\mathcal{L}_{\text{ib}}, \mathcal{L}_{\text{orth}}, \mathcal{L}_{\text{var}}$ organize the learned features hierarchically, pushing essential features into early dimensions while maintaining uniqueness and stable variance distribution across expanding dimensional levels, and 
+$\mathcal{L}_{\text{quant}}$ directly encourages embeddings to settle into regions that are easily separable by the quantizer, thereby reducing errors from threshold-based discretization.
 Finally, these losses can be summed with appropriate weights to form the complete training objective.
-This unified framework delivers \emph{nested, increasingly robust} embeddings within a single training pipeline, enabling flexible deployment scenarios where early dimensions provide quick approximate search, while further dimensions refine accuracy for more demanding tasks.
+% This unified framework delivers \emph{nested, increasingly robust} embeddings within a single training pipeline, enabling flexible deployment scenarios where early dimensions provide quick approximate search, while further dimensions refine accuracy for more demanding tasks.
 
 \subsection{Hybrid Architecture}
 \label{subsec:hybrid_architecture}
@@ -229,27 +196,28 @@ For the last quarter of dimensions, pairs are combined:
 \begin{equation}
     \mathbf{z}_{\text{reduced}} = \text{FFN}_{\text{reduce}}\Bigl([\mathbf{x}_{2i}, \mathbf{x}_{2i+1}]\Bigr),
 \end{equation}
-where a specialized FFN preserves essential information while halving the dimensional load. Figure~\ref{fig:hybrid_architecture} illustrates the full hybrid quantization pipeline.
+where a specialized FFN preserves essential information while halving the dimensional load. 
+% Figure~\ref{fig:hybrid_architecture} illustrates the full hybrid quantization pipeline.
 
 \subsection{Efficient Storage and Similarity Computation}
 \label{subsec:storage_and_similarity}
 
-We combine bit-level optimizations with carefully designed expansions that preserve semantic similarity in quantized embeddings while minimizing storage overhead.
+We combine bit-packing with carefully designed expansions that preserve semantic similarity in quantized embeddings while minimizing storage overhead.
 
-\subsubsection{Bit Packing and Storage}
 \paragraph{Bit Packing Process:}
 \begin{enumerate}
     \item Convert quantized vectors to binary form. 
-    \item Pack bits into $N$-bit words ($N \in \{8,16,32\}$) via:
-    \begin{equation}
-        \mathbf{w}_i = \sum_{j=0}^{N-1} b_{Ni+j} \cdot 2^{N-j-1},
-    \end{equation}
-    where $b_k$ is the $k$-th bit.
+    % \item Pack bits into $N$-bit words ($N \in \{8,16,32\}$) via:
+    % \begin{equation}
+    %     \mathbf{w}_i = \sum_{j=0}^{N-1} b_{Ni+j} \cdot 2^{N-j-1},
+    % \end{equation}
+    % where $b_k$ is the $k$-th bit.
     \item Add padding bits if needed.
     \item Store as \texttt{uint64} arrays for optimal alignment.
 \end{enumerate}
 
-\subsubsection{Binary Codebook Expansion}
+\paragraph{Binary Codebook Expansion}
+We expand the binary codes to preserve fine-grained similarities while minimizing storage overhead.
 \paragraph{2-bit to 3-bit:}
 \begin{equation}
 \text{Codebook}_{2\rightarrow3} =
@@ -279,7 +247,6 @@ For example:
 \end{equation}
 Maps three-level codes to 2 bits, improving similarity preservation while keeping compact storage.
 
-\subsubsection{Hamming Similarity Computation}
 \paragraph{Basic Hamming Similarity:}
 For binary vectors $\mathbf{x}, \mathbf{y}$ of length $n$ (bits),
 \begin{equation}
@@ -292,4 +259,4 @@ where $\oplus$ is XOR and \text{POPCOUNT} counts set bits.
 \paragraph{Implementation Details:} 
 Modern CPUs offer hardware-accelerated \texttt{XOR} and \texttt{POPCNT} instructions (optionally AVX-512) enabling high-throughput Hamming distance computation on packed 64-bit words.
 We leverage \texttt{numpy.packbits}, \texttt{numpy.unpackbits}, \texttt{numpy.bitwise\_xor}, and \texttt{numpy.bitwise\_count} for fast, vectorized bit manipulation and codebook expansions.
-These strategies tightly pack quantized representations, expand codes to preserve fine-grained similarities, and compute large-scale Hamming distances rapidly, yielding an efficient, similarity-aware embedding system.
+% These strategies tightly pack quantized representations, expand codes to preserve fine-grained similarities, and compute large-scale Hamming distances rapidly, yielding an efficient, similarity-aware embedding system.
