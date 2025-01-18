@@ -49,6 +49,8 @@ Tables~\ref{tab:mb_main_results} and~\ref{tab:minilm_main_results} compare the p
 \end{tabular}
 \end{table}
 
+Note that for Modern BERT, with dimension FP32, and dimension as 768 (original dimension), the NDCG@10 is 0.4720 and this was using the original model with no changes. 
+For MiniLM, with dimension FP32, and dimension as 384 (original dimension), the NDCG@10 is 0.4286 and this was using the original model with no changes.
 From the results, we observe that our proposed QAMA framework achieves competitive performance compared to the full-precision (FP32) embeddings, even at significantly reduced storage sizes. 
 For instance, the 2-bit quantized embeddings at 384 dimensions achieve an nDCG@10 of 0.4593 with Modern Bert and 0.4185 with MiniLM, which is close to the FP32 performance while reducing the storage requirements substantially.
 Although slightly behind pure 2-bit in accuracy, Hybrid Quant offers additional storage savings (\(\approx 1{-}4\%\) more than 2-bit) while keeping performance within 1--2\% of the best quantized results. 
@@ -120,9 +122,9 @@ We highlight a few \emph{aha} observations here:
 \toprule
 \textbf{Training Components} & \textbf{1-bit} & \textbf{1.5-bit} & \textbf{Hybrid Quant} & \textbf{2-bit} & \textbf{FP32} \\
 \midrule
-Thresholds Only                          & 0.3900  & 0.4250  & 0.4358  & 0.4370  & 0.4395 \\
+Thresholds Only                          & 0.3900  & 0.4250  & 0.4358  & 0.4370  & - \\
 + Trainable FFN Transform               & 0.3922  & 0.4275  & 0.4380  & 0.4390  & 0.4410 \\
-+ Quantization Loss                      & 0.3945  & 0.4298  & 0.4402  & 0.4415  & 0.4430 \\
++ Quantization Loss                      & 0.3945  & 0.4298  & 0.4402  & 0.4415  & - \\
 + Matryoshka Loss                        & 0.3998  & 0.4318  & 0.4410  & 0.4425  & 0.4632 \\
 + Orthogonality Regularization           & 0.4012  & 0.4329  & 0.4430  & 0.4440  & 0.4645 \\
 + Information Bottleneck Regularization  & 0.4025  & 0.4340  & 0.4442  & 0.4455  & 0.4658 \\
@@ -141,9 +143,9 @@ Thresholds Only                          & 0.3900  & 0.4250  & 0.4358  & 0.4370 
 \toprule
 \textbf{Training Components} & \textbf{1-bit} & \textbf{1.5-bit} & \textbf{Hybrid Quant} & \textbf{2-bit} & \textbf{FP32} \\
 \midrule
-Thresholds Only                          & 0.2900  & 0.3550  & 0.3755  & 0.3850  & 0.3880 \\
+Thresholds Only                          & 0.2900  & 0.3550  & 0.3755  & 0.3850  & - \\
 + Trainable FFN Transform               & 0.2922  & 0.3575  & 0.3778  & 0.3872  & 0.3900 \\
-+ Quantization Loss                      & 0.2943  & 0.3597  & 0.3801  & 0.3893  & 0.3920 \\
++ Quantization Loss                      & 0.2943  & 0.3597  & 0.3801  & 0.3893  & - \\
 + Matryoshka Loss                        & 0.3107  & 0.3732  & 0.3945  & 0.4050  & 0.4405 \\
 + Orthogonality Regularization           & 0.3125  & 0.3752  & 0.3964  & 0.4068  & 0.4422 \\
 + Information Bottleneck Regularization  & 0.3142  & 0.3770  & 0.3983  & 0.4087  & 0.4440 \\
@@ -164,9 +166,9 @@ For the MiniLM model, the ablation results are as follows:
 \toprule
 \textbf{Training Components} & \textbf{1-bit} & \textbf{1.5-bit} & \textbf{Hybrid Quant} & \textbf{2-bit} & \textbf{FP32} \\
 \midrule
-Thresholds Only                         & 0.2947 & 0.3205 & 0.3260 & 0.3324 & 0.3398 \\
+Thresholds Only                         & 0.2947 & 0.3205 & 0.3260 & 0.3324 & - \\
 + Trainable FFN Transform              & 0.3112 & 0.3538 & 0.3645 & 0.3753 & 0.3841 \\
-+ Quantization Loss                     & 0.3267 & 0.3661 & 0.3773 & 0.3883 & 0.3958 \\
++ Quantization Loss                     & 0.3267 & 0.3661 & 0.3773 & 0.3883 & - \\
 + Matryoshka Loss                       & 0.3318 & 0.3709 & 0.3821 & 0.3922 & 0.3996 \\
 + Orthogonality Regularization          & 0.3354 & 0.3741 & 0.3850 & 0.3940 & 0.4019 \\
 + Information Bottleneck Regularization & 0.3389 & 0.3768 & 0.3876 & 0.3961 & 0.4035 \\
@@ -185,9 +187,9 @@ Thresholds Only                         & 0.2947 & 0.3205 & 0.3260 & 0.3324 & 0.
 \toprule
 \textbf{Training Components} & \textbf{1-bit} & \textbf{1.5-bit} & \textbf{Hybrid Quant} & \textbf{2-bit} & \textbf{FP32} \\
 \midrule
-Thresholds Only                          & 0.2050 & 0.2330 & 0.2375 & 0.2428 & 0.2483 \\
-+ Trainable FFN Transform               & 0.2250 & 0.2570 & 0.2715 & 0.2860 & 0.2925 \\
-+ Quantization Loss                      & 0.2640 & 0.3017 & 0.3161 & 0.3304 & 0.3344 \\
+Thresholds Only                          & 0.2050 & 0.2330 & 0.2375 & 0.2428 & - \\
++ Trainable FFN Transform               & 0.2250 & 0.2570 & 0.2715 & 0.2860 & 0.3340 \\
++ Quantization Loss                      & 0.2640 & 0.3017 & 0.3161 & 0.3304 & - \\
 + Matryoshka Loss                        & 0.3100 & 0.3350 & 0.3450 & 0.3550 & 0.3600 \\
 + Orthogonality Regularization           & 0.3150 & 0.3380 & 0.3480 & 0.3575 & 0.3625 \\
 + Information Bottleneck Regularization  & 0.3175 & 0.3400 & 0.3500 & 0.3590 & 0.3640 \\
@@ -252,7 +254,7 @@ Additionally, to gauge real-world performance, we measure relative wall clock ti
         \hline
         FP32 & 32 & 3072\,B & 3.07\,GB & 0.0 & 100.0 & 1.0× & 1.0× \\
         FP16 & 16 & 1536\,B & 1.54\,GB & 50.0 & 99.9 & 0.95× & 0.98× \\
-        Int8 & 8 & 768\,B & 768\,MB & 75.0 & 99.8 & 0.92× & 0.95× \\
+        Int8 & 8 & 768\,B & 768\,MB & 75.0 & 98.9 & 0.92× & 0.95× \\
         2-bit (3-bit expanded) & 3 & 288\,B & 288\,MB & 90.6 & 96.35 & 0.85× & 0.90× \\
         1.5-bit (2-bit expanded) & 2 & 192\,B & 192\,MB & 93.8 & 89.73 & 0.80× & 0.85× \\
         1-bit & 1 & 96\,B & 96\,MB & 96.9 & 80.74 & 0.75× & 0.82× \\

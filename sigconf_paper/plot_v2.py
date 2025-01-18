@@ -50,9 +50,46 @@ color_map_minilm = {
     'FP32': '#800000'        # Dark red but lighter than before
 }
 
+# Add baseline data for Modern BERT
+mb_baseline_data = {
+    '1-bit': np.array([0.2500, 0.2900, 0.3300, 0.3900, 0.4350]),  # Thresholds Only row
+    '2-bit': np.array([0.3500, 0.3850, 0.4200, 0.4370, 0.4640])   # Thresholds Only row
+}
+
+# Add baseline data for MiniLM
+minilm_baseline_data = {
+    '1-bit': np.array([0.1180, 0.2050, 0.2566, 0.2947, 0.3055]),  # Thresholds Only row
+    '2-bit': np.array([0.1500, 0.2428, 0.2879, 0.3324, 0.3431])   # Thresholds Only row
+}
+
+# Update color maps to include baseline colors
+color_map_mb.update({
+    '1-bit-baseline': '#B19CD9',  # Light purplish
+    '2-bit-baseline': '#9370DB'   # Medium purplish
+})
+
+color_map_minilm.update({
+    '1-bit-baseline': '#FFD700',  # Darker yellow (Gold)
+    '2-bit-baseline': '#FFB347'   # Darker orange/yellow
+})
+
 # Plot Modern BERT on first subplot
 max_dim_mb = max(mb_dims)
 mb_handles = []  # Store handles for MB legend
+
+# Plot baselines first
+for quant_type in ['1-bit']:
+    x = mb_dims / max_dim_mb
+    y = mb_baseline_data[quant_type]
+    line, = ax1.plot(x, y,
+                    linestyle='dashdot',
+                    marker=None,
+                    color=color_map_mb[f'{quant_type}-baseline'],
+                    alpha=0.6,
+                    label=f'MB-{quant_type}-baseline',
+                    linewidth=1.5)
+    mb_handles.append(line)
+    
 for quant_type, values in mb_data.items():
     x = mb_dims / max_dim_mb
     y = values
@@ -76,9 +113,24 @@ for quant_type, values in mb_data.items():
                     linewidth=linewidth)
     mb_handles.append(line)
 
-# Plot MiniLM on second subplot
 max_dim_minilm = max(minilm_dims)
 minilm_handles = []  # Store handles for MiniLM legend
+
+# Plot baselines first
+for quant_type in ['1-bit', ]:
+    x = minilm_dims / max_dim_minilm
+    y = minilm_baseline_data[quant_type]
+    line, = ax2.plot(x, y,
+                    linestyle='dashdot',
+                    marker=None,
+                    color=color_map_minilm[f'{quant_type}-baseline'],
+                    alpha=0.6,
+                    label=f'MiniLM-{quant_type}-baseline',
+                    linewidth=1.5)
+    minilm_handles.append(line)
+
+# Plot MiniLM on second subplot
+
 for quant_type, values in minilm_data.items():
     x = minilm_dims / max_dim_minilm
     y = values
@@ -106,7 +158,10 @@ for quant_type, values in minilm_data.items():
 for ax in [ax1, ax2]:
     ax.set_xlabel('Relative Dimension (D/D_max)', fontsize=12)
     ax.set_ylabel('nDCG@10', fontsize=12, fontweight='bold')
-    ax.set_ylim(0.25, 0.5)
+    if ax == ax1:
+        ax.set_ylim(0.2, 0.5)
+    else:
+        ax.set_ylim(0.1, 0.45)
     ax.set_xticks([0.125, 0.25, 0.33, 0.5, 1.0])
     ax.set_xticklabels(['D/8', 'D/4', 'D/3', 'D/2', 'D'])
     ax.grid(True, linestyle='--', alpha=0.7)
